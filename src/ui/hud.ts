@@ -1,9 +1,14 @@
 import type { Game, OfflineSummary } from "../core/game";
 import { decodeExport, encodeExport } from "../core/save";
+import { ACHIEVEMENTS, achievement, achievementBonusText } from "../sim/achievements";
 import { BRASS, brassCost, brassLevel, brassMaxed } from "../sim/brass";
 import { CONFIG } from "../sim/config";
 import {
   brassForReset,
+  gearboxCost,
+  gearboxHeat,
+  gearboxUnlocked,
+  gearOf,
   globalMult,
   MAX_TIER,
   material,
@@ -25,6 +30,7 @@ import {
 import { STORY } from "../sim/dialogue";
 import { clockProgress } from "../sim/story";
 import { heatOf, heatRgb } from "../render/renderer";
+import { EVENTS } from "../sim/events";
 import { fmt, fmtDuration, fmtRpm } from "../util/format";
 import { byId, h, setText, showModal } from "./dom";
 
@@ -35,6 +41,7 @@ interface HudActions {
   toggleView(): boolean;
   /** Anselmo vuelve a contar una parte de la historia. */
   retell(id: string): void;
+  setReduceMotion(on: boolean): void;
 }
 
 interface StageRow {
@@ -46,6 +53,12 @@ interface StageRow {
   btn: HTMLButtonElement;
   label: HTMLElement;
   cost: HTMLElement;
+  /** Caja de cambios: instalar, o elegir marcha. */
+  gearRow: HTMLElement;
+  install: HTMLButtonElement;
+  installCost: HTMLElement;
+  short: HTMLButtonElement;
+  long: HTMLButtonElement;
 }
 
 /** Un botón de la barra inferior: título, una línea de detalle y un precio. */
@@ -75,6 +88,9 @@ export class Hud {
   private heatFill = byId("heat-fill");
   private toastEl = byId("toast");
   private toastTimer = 0;
+  private achievementEl = byId("achievement-toast");
+  private achievementQueue: string[] = [];
+  private achievementTimer = 0;
 
   private motor = this.action("Mejorar motor", () => this.game.buyMotor(this.amount));
   private gears = this.action("Engranajes", () => this.openWorkshop());
@@ -93,6 +109,68 @@ export class Hud {
     });
     byId("memories-btn").addEventListener("click", () => this.openMemories());
     byId("settings-btn").addEventListener("click", () => this.openSettings());
+    byId("achievements-btn").addEventListener("click", () => this.openAchievements());
+  }
+
+  /** Atajos de teclado (sin ventanas abiertas). Devuelve true si la tecla hizo algo. */
+  handleKey(key: string): boolean {
+    switch (key.toLowerCase()) {
+      case "m":
+        this.game.buyMotor(this.amount);
+        return true;
+      case "e":
+        this.game.buyStage();
+        return true;
+      case "t":
+        this.openWorkshop();
+        return true;
+      case "f":
+        this.openFoundry();
+        return true;
+      case "l":
+        this.openAchievements();
+        return true;
+      case "r":
+        this.openMemories();
+        return true;
+      case "v":
+        byId("view-btn").click();
+        return true;
+      case "1":
+      case "2":
+      case "3":
+        this.amount = AMOUNTS[Number(key) - 1];
+        this.toast(`Comprar ${this.amount === Infinity ? "al máximo" : `×${this.amount}`}`, 1200);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /** Aviso de logro conseguido: arriba, de uno en uno. */
+  showAchievement(id: string): void {
+    this.achievementQueue.push(id);
+    if (this.achievementTimer === 0) this.nextAchievement();
+  }
+
+  private nextAchievement(): void {
+    const id = this.achievementQueue.shift();
+    const a = id ? achievement(id) : undefined;
+    if (!a) {
+      this.achievementEl.hidden = true;
+      this.achievementTimer = 0;
+      return;
+    }
+    this.achievementEl.replaceChildren(
+      h("span", { class: "ach-star" }, "★"),
+      h("span", {}, h("span", { class: "ach-label" }, "Logro: "), a.name),
+      h("span", { class: "ach-bonus" }, `+${Math.round(CONFIG.achievementBonus * 100)}%`),
+    );
+    this.achievementEl.hidden = false;
+    this.achievementEl.classList.remove("show");
+    void this.achievementEl.offsetWidth;
+    this.achievementEl.classList.add("show");
+    this.achievementTimer = window.setTimeout(() => this.nextAchievement(), 3200);
   }
 
   private action(title: string, onClick: () => void): ActionButton {
@@ -137,6 +215,13 @@ export class Hud {
   private openWorkshop(): void {
     const g = this.game;
     const buyAll = h("button", { class: "buy wide-btn", onclick: () => g.buyAllTeeth() }, "Mejorar todo lo que alcance (lo más barato primero)");
+    const heatInfo = h("span", { class: "muted" });
+    const gearBar = h("div", { class: "gear-bar" },
+      h("span", { class: "gear-bar-title" }, "Marchas"),
+      h("button", { class: "buy gear-short", onclick: () => g.setGear(0, 1) }, "Todas cortas"),
+      h("button", { class: "buy gear-long", onclick: () => g.setGear(0, 2) }, "Todas largas"),
+      heatInfo,
+    );
     this.openLive("Taller de engranajes", (root) => {
       let rows: StageRow[] = [];
       let built = -1;
@@ -155,11 +240,19 @@ export class Hud {
         }
         for (const r of rows) this.updateStageRow(r);
         buyAll.classList.toggle("affordable", this.affordableTeethCount() > 0);
+        gearBar.hidden = !gearboxUnlocked(s);
+        const heat = gearboxHeat(s);
+        const cool = CONFIG.overdrive.coolPerSec;
+        setText(heatInfo, heat > cool
+          ? `Calor de las marchas: +${heat.toFixed(2)}/s. ¡El motor no da abasto!`
+          : `Calor de las marchas: ${heat >= 0 ? "+" : ""}${heat.toFixed(2)}/s (el motor enfría ${cool.toFixed(2)}/s)`);
+        heatInfo.classList.toggle("danger-text", heat > cool);
       };
     }, [
       h("p", { class: "muted" }, "Más dientes en una rueda = el piñón que mueve gira más rápido. La relación de cada etapa multiplica todo lo que viene detrás."),
       this.amountBar(),
       buyAll,
+      gearBar,
     ]);
   }
 
@@ -173,14 +266,25 @@ export class Hud {
       label: h("span", {}),
       cost: h("span", { class: "cost" }),
       btn: h("button", { class: "buy" }),
+      gearRow: h("div", { class: "gear-row" }),
+      install: h("button", { class: "buy" }),
+      installCost: h("span", { class: "cost" }),
+      short: h("button", { class: "gear-btn gear-short" }, `Corta ×${CONFIG.gearbox.short}`),
+      long: h("button", { class: "gear-btn gear-long" }, `Larga ×${CONFIG.gearbox.long}`),
     };
     row.btn.append(row.label, row.cost);
     row.btn.onclick = () => this.game.buyTeeth(i, this.amount);
+    row.install.append(h("span", {}, "Instalar caja de cambios"), row.installCost);
+    row.install.onclick = () => this.game.buyGearbox(i);
+    row.short.onclick = () => this.game.setGear(i, 1);
+    row.long.onclick = () => this.game.setGear(i, 2);
+    row.gearRow.append(row.install, row.short, row.long);
     h("div", { class: "card stage-row" },
       h("div", { class: "card-head" }, h("span", { class: "title" }, `Etapa ${i}`), row.chip),
       row.meta,
       h("div", { class: "tier-row" }, h("div", { class: "bar" }, row.fill), row.next),
       row.btn,
+      row.gearRow,
     );
     return row;
   }
@@ -218,6 +322,19 @@ export class Hud {
       setText(c.cost, fmt(b.cost));
       c.btn.disabled = false;
       c.btn.classList.toggle("affordable", b.cost <= s.coins);
+    }
+    const gear = gearOf(s, c.shaft);
+    c.gearRow.hidden = !gearboxUnlocked(s);
+    c.install.hidden = gear !== 0;
+    c.short.hidden = gear === 0;
+    c.long.hidden = gear === 0;
+    if (gear === 0) {
+      const cost = gearboxCost(c.shaft);
+      setText(c.installCost, fmt(cost));
+      c.install.classList.toggle("affordable", cost <= s.coins);
+    } else {
+      c.short.classList.toggle("active", gear === 1);
+      c.long.classList.toggle("active", gear === 2);
     }
   }
 
@@ -357,8 +474,31 @@ export class Hud {
           { label: "Borrar", onClick: () => this.actions.wipe() },
         ]),
     }, "Borrar partida");
-    const help = h("p", { class: "muted" }, "Manivela: clic en el taller o Espacio. Sobremarcha: mantén el botón o Shift.");
-    showModal("Ajustes", [help, h("div", { class: "settings-list" }, mute, exportBtn, importBtn, wipe)], [{ label: "Cerrar", primary: true }]);
+    const motion = h("button", {}, s.settings.reduceMotion ? "Destellos y temblores: reducidos" : "Destellos y temblores: normales");
+    motion.onclick = () => {
+      s.settings.reduceMotion = !s.settings.reduceMotion;
+      this.actions.setReduceMotion(s.settings.reduceMotion);
+      setText(motion, s.settings.reduceMotion ? "Destellos y temblores: reducidos" : "Destellos y temblores: normales");
+    };
+    const keys: [string, string][] = [
+      ["Clic / Espacio", "Manivela"],
+      ["Shift (mantener)", "Sobremarcha"],
+      ["M", "Mejorar motor"],
+      ["E", "Añadir engranaje"],
+      ["T", "Taller de engranajes"],
+      ["F", "Fundición"],
+      ["L", "Logros y estadísticas"],
+      ["R", "Recuerdos de Anselmo"],
+      ["V", "Ver todo / seguir la salida"],
+      ["1 · 2 · 3", "Comprar ×1 · ×10 · Máx"],
+      ["Esc", "Cerrar ventana"],
+    ];
+    const shortcuts = h("div", { class: "shortcuts" }, ...keys.map(([k, d]) => h("div", {}, h("kbd", {}, k), h("span", {}, d))));
+    showModal("Ajustes", [
+      h("div", { class: "settings-list" }, mute, motion, exportBtn, importBtn, wipe),
+      h("h3", { class: "section-title" }, "Atajos de teclado"),
+      shortcuts,
+    ], [{ label: "Cerrar", primary: true }], { wide: true });
   }
 
   /** Recuerdos: lo que Anselmo ya ha contado. Elegir uno hace que lo vuelva a contar. */
@@ -380,6 +520,45 @@ export class Hud {
       );
     }
     close = showModal("Recuerdos de Anselmo", [h("p", { class: "muted" }, "Elige un recuerdo y Anselmo te lo volverá a contar."), list], [{ label: "Cerrar", primary: true }]);
+  }
+
+  /** Logros (con su bonus) y estadísticas de la partida. */
+  private openAchievements(): void {
+    const s = this.game.state;
+    const st = s.stats;
+    const stats: [string, string][] = [
+      ["Tiempo de juego", fmtDuration(s.timeAll)],
+      ["Monedas totales", fmt(s.totalAll)],
+      ["Récord de salida", fmtRpm(s.bestRps)],
+      ["Etapas máximas", String(s.maxStages)],
+      ["Fundiciones", String(s.rebirths)],
+      ["Clics de manivela", fmt(st.crankClicks)],
+      ["Dientes comprados", fmt(st.teethBought)],
+      ["Engranajes añadidos", fmt(st.stagesBought)],
+      ["Gripados", fmt(st.stalls)],
+      ["Sobremarcha más larga", `${st.maxHold.toFixed(1)} s`],
+      ["Eventos resueltos", fmt(st.eventsResolved)],
+      ["Mejor racha", String(st.maxStreak)],
+      ["Engranajes dorados", fmt(st.goldenCaught)],
+      ["Pedidos cumplidos", fmt(st.requestsDone)],
+      ["Recuerdos de Anselmo", `${s.events.fragments}/${EVENTS.maxFragments}`],
+      ["Cambios de marcha", fmt(st.gearShifts)],
+    ];
+    const done = s.achievements.length;
+    const grid = h("div", { class: "ach-grid" },
+      ...ACHIEVEMENTS.map((a) => {
+        const got = s.achievements.includes(a.id);
+        return h("div", { class: got ? "ach got" : "ach" },
+          h("span", { class: "ach-star" }, got ? "★" : "☆"),
+          h("span", { class: "ach-text" }, h("span", { class: "ach-name" }, a.name), h("span", { class: "ach-desc" }, a.desc)),
+        );
+      }),
+    );
+    showModal("Logros y estadísticas", [
+      h("div", { class: "stats-grid" }, ...stats.map(([k, v]) => h("div", {}, h("span", { class: "muted" }, k), h("span", {}, v)))),
+      h("h3", { class: "section-title" }, `Logros: ${done}/${ACHIEVEMENTS.length} · ${achievementBonusText(s)}`),
+      grid,
+    ], [{ label: "Cerrar", primary: true }], { wide: true });
   }
 
   /** Pantalla de fin, cuando Anselmo termina de contar el final. */

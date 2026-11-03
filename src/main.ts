@@ -32,7 +32,11 @@ function loadState(): GameState | null {
 }
 
 const loaded = loadState();
-const game = new Game(loaded ?? newGame());
+const fresh = newGame();
+// En una partida nueva se respeta la preferencia del sistema de reducir el movimiento.
+if (!loaded) fresh.settings.reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+const game = new Game(loaded ?? fresh);
+document.body.classList.toggle("reduce-motion", game.state.settings.reduceMotion);
 /** Tras borrar o importar se recarga la página; esto evita que el autoguardado pise el cambio. */
 let saving = true;
 
@@ -79,6 +83,7 @@ const hud = new Hud(game, {
   setMuted: (m) => sound.setMuted(m),
   toggleView: () => (renderer.showAll = !renderer.showAll),
   retell: (id) => anselmo.retell(id),
+  setReduceMotion: (on) => document.body.classList.toggle("reduce-motion", on),
 });
 
 const anselmo = new AnselmoUI(game);
@@ -109,7 +114,7 @@ for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) {
 }
 
 window.addEventListener("keydown", (e) => {
-  if (isModalOpen() || e.repeat) return;
+  if (isModalOpen() || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
   sound.unlock();
   if (e.code === "Space") {
     e.preventDefault();
@@ -117,6 +122,8 @@ window.addEventListener("keydown", (e) => {
     crankBtn.classList.add("pressed");
   } else if (e.key === "Shift") {
     setOverdrive(true);
+  } else if (hud.handleKey(e.key)) {
+    e.preventDefault();
   }
 });
 window.addEventListener("keyup", (e) => {
@@ -170,8 +177,15 @@ startLoop({
       else if (e.type === "crank") sound.tick(0.7);
       else if (e.type === "rebirth") sound.foundry();
       else if (e.type === "brass") sound.chime(6);
-      else if (e.type === "story") sound.chime(e.id === "final" ? 10 : 4);
+      else if (e.type === "story" && e.id === ENDING_ID) {
+        // El Gran Reloj vuelve a dar la hora: doce campanadas serían demasiadas; con cuatro basta.
+        for (let k = 0; k < 4; k++) setTimeout(() => sound.bell(), k * 1400);
+      } else if (e.type === "story") sound.chime(4);
       else if (e.type === "event") playEventSound(e.news);
+      else if (e.type === "achievement") {
+        hud.showAchievement(e.id);
+        sound.chime(5);
+      } else if (e.type === "gearbox") sound.clunk();
     }
     renderer.handle(events);
     anselmo.handle(events);

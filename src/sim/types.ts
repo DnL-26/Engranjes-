@@ -9,6 +9,32 @@ export interface Shaft {
   teethLevel: number;
   /** Vueltas acumuladas en este ciclo; deciden el material. */
   revs: number;
+  /** Caja de cambios de la etapa: 0 sin caja, 1 marcha corta, 2 marcha larga. */
+  gear?: Gear;
+}
+
+export type Gear = 0 | 1 | 2;
+
+/** Contadores para los logros y la pantalla de estadísticas. Permanentes. */
+export interface Stats {
+  crankClicks: number;
+  stalls: number;
+  goldenCaught: number;
+  eventsResolved: number;
+  perfectRepairs: number;
+  requestsDone: number;
+  maxStreak: number;
+  /** Mayor multiplicador al estabilizar un engranaje inestable. */
+  bestUnstable: number;
+  peddlerJunk: number;
+  bestResonance: number;
+  /** Segundos seguidos de sobremarcha sin gripar: el actual y el récord. */
+  holdNow: number;
+  maxHold: number;
+  lastRebirthGain: number;
+  teethBought: number;
+  stagesBought: number;
+  gearShifts: number;
 }
 
 export interface GameState {
@@ -56,9 +82,17 @@ export interface GameState {
 
   /** Eventos aleatorios: el activo, las mejoras temporales, la racha y los fragmentos. */
   events: EventsState;
+  /** Logros conseguidos, en orden. */
+  achievements: string[];
+  stats: Stats;
 
   lastSaved: number;
-  settings: { muted: boolean; automaton: boolean };
+  settings: {
+    muted: boolean;
+    automaton: boolean;
+    /** Atenúa destellos, relámpagos, temblores de cámara y animaciones (fotosensibilidad). */
+    reduceMotion: boolean;
+  };
 }
 
 /** Lo que el jugador está haciendo en este instante y no se guarda. */

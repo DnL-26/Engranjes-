@@ -20,6 +20,7 @@ export function deserialize(json: string): GameState {
     settings: { ...base.settings, ...f.settings },
     story: { ...base.story, ...f.story },
     events: { ...base.events, ...f.events },
+    stats: { ...base.stats, ...f.stats },
     brassUpgrades: { ...f.brassUpgrades },
     version: SAVE_VERSION,
   } as GameState;

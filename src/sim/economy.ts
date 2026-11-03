@@ -1,9 +1,17 @@
 import { brassLevel } from "./brass";
 import { CONFIG, MATERIALS } from "./config";
 import { crankMult, eventIncomeMult, heatFactor, newEventsState, stageFactor } from "./modifiers";
-import type { GameState, Input } from "./types";
+import type { Gear, GameState, Input, Stats } from "./types";
 
 export const SAVE_VERSION = 2;
+
+export function newStats(): Stats {
+  return {
+    crankClicks: 0, stalls: 0, goldenCaught: 0, eventsResolved: 0, perfectRepairs: 0, requestsDone: 0,
+    maxStreak: 0, bestUnstable: 0, peddlerJunk: 0, bestResonance: 0, holdNow: 0, maxHold: 0,
+    lastRebirthGain: 0, teethBought: 0, stagesBought: 0, gearShifts: 0,
+  };
+}
 
 export function newGame(): GameState {
   return {
@@ -28,8 +36,10 @@ export function newGame(): GameState {
     maxStages: 0,
     story: { seen: [], unread: [], reactions: [], ended: false, endTime: 0 },
     events: newEventsState(),
+    achievements: [],
+    stats: newStats(),
     lastSaved: Date.now(),
-    settings: { muted: false, automaton: true },
+    settings: { muted: false, automaton: true, reduceMotion: false },
   };
 }
 
@@ -78,13 +88,65 @@ export function overdriveMult(s: GameState): number {
   return 1 + (overdriveMax(s) - 1) * s.overdrive;
 }
 
+// --- Cajas de cambios ---
+
+export function gearboxUnlocked(s: GameState): boolean {
+  return s.rebirths > 0;
+}
+
+export function gearOf(s: GameState, stage: number): Gear {
+  return s.shafts[stage]?.gear ?? 0;
+}
+
+/** Factor de la marcha sobre la relación de una etapa. */
+export function gearFactor(s: GameState, stage: number): number {
+  const g = gearOf(s, stage);
+  return g === 2 ? CONFIG.gearbox.long : g === 1 ? CONFIG.gearbox.short : 1;
+}
+
+/** Calor por segundo que suman (o restan) las marchas, aunque no haya sobremarcha. */
+export function gearboxHeat(s: GameState): number {
+  let n = 0;
+  for (let i = 1; i < s.shafts.length; i++) n += gearOf(s, i) === 2 ? 1 : gearOf(s, i) === 1 ? -1 : 0;
+  return n * CONFIG.gearbox.heatPerSec * (1 - 0.2 * brassLevel(s, "radiator"));
+}
+
+export function gearboxCost(stage: number): number {
+  return stageCost(stage) * CONFIG.gearbox.costFactor;
+}
+
+export function buyGearbox(s: GameState, stage: number): boolean {
+  if (!gearboxUnlocked(s) || stage < 1 || stage >= s.shafts.length || gearOf(s, stage) !== 0) return false;
+  const cost = gearboxCost(stage);
+  if (cost > s.coins) return false;
+  s.coins -= cost;
+  s.shafts[stage].gear = 2;
+  return true;
+}
+
+/** Cambia de marcha una etapa con caja, o todas con stage = 0. Devuelve cuántas cambiaron. */
+export function setGear(s: GameState, stage: number, gear: 1 | 2): number {
+  const from = stage === 0 ? 1 : stage;
+  const to = stage === 0 ? s.shafts.length - 1 : stage;
+  let changed = 0;
+  for (let i = from; i <= to; i++) {
+    const g = gearOf(s, i);
+    if (g !== 0 && g !== gear) {
+      s.shafts[i].gear = gear;
+      changed++;
+    }
+  }
+  s.stats.gearShifts += changed;
+  return changed;
+}
+
 /** Vueltas por segundo de cada eje en este instante. */
 export function shaftSpeeds(s: GameState): number[] {
   const out = new Array<number>(s.shafts.length);
   let v = (s.motorSpeed + s.crank) * overdriveMult(s);
   out[0] = v;
   for (let i = 1; i < s.shafts.length; i++) {
-    const ratio = stageRatio(s, i);
+    const ratio = stageRatio(s, i) * gearFactor(s, i);
     v = Math.min(CONFIG.maxNumber, v * ratio * stageFactor(s, i, ratio));
     out[i] = v;
   }
@@ -118,10 +180,14 @@ export function globalMult(s: GameState): number {
   return tierMult(s) ** totalTiers(s);
 }
 
+export function achievementMult(s: GameState): number {
+  return 1 + CONFIG.achievementBonus * s.achievements.length;
+}
+
 export function incomePerSecond(s: GameState, speeds = shaftSpeeds(s)): number {
   let sum = 0;
   for (const v of speeds) sum += v;
-  return Math.min(CONFIG.maxNumber, sum * CONFIG.payoutPerRev * globalMult(s) * eventIncomeMult(s));
+  return Math.min(CONFIG.maxNumber, sum * CONFIG.payoutPerRev * globalMult(s) * eventIncomeMult(s) * achievementMult(s));
 }
 
 // --- Costes ---
@@ -193,6 +259,7 @@ export function buyTeeth(s: GameState, stage: number, want: number): number {
   if (b.count === 0 || b.cost > s.coins) return 0;
   s.coins -= b.cost;
   s.shafts[stage].teethLevel += b.count;
+  s.stats.teethBought += b.count;
   return b.count;
 }
 
@@ -202,6 +269,7 @@ export function buyStage(s: GameState): boolean {
   s.coins -= cost;
   s.shafts.push({ teethLevel: 0, revs: 0 });
   s.maxStages = Math.max(s.maxStages, stageCount(s));
+  s.stats.stagesBought++;
   return true;
 }
 
@@ -293,6 +361,7 @@ export function crank(s: GameState): boolean {
   if (s.stall > 0) return false;
   const imp = crankImpulse(s);
   s.crank = Math.min(s.crank + imp, imp * CONFIG.crank.maxImpulses);
+  s.stats.crankClicks++;
   return true;
 }
 
@@ -327,6 +396,7 @@ export function rebirth(s: GameState): number {
   });
   s.brass += gain;
   s.rebirths++;
+  s.stats.lastRebirthGain = gain;
   applyBlueprints(s);
   return gain;
 }
@@ -372,12 +442,21 @@ export function tick(s: GameState, input: Input, dt: number): TickResult {
     ? Math.min(1, s.overdrive + od.rampPerSec * dt)
     : Math.max(0, s.overdrive - od.releasePerSec * dt);
   const heatRate = od.heatPerSec * (1 - 0.2 * brassLevel(s, "radiator")) * heatFactor(s);
-  s.heat = Math.min(1, Math.max(0, s.heat + (heatRate * s.overdrive - od.coolPerSec * (1 - s.overdrive)) * dt));
+  // Las marchas largas calientan el motor aunque no haya sobremarcha; las cortas ayudan a enfriarlo.
+  const passive = s.stall > 0 ? Math.min(0, gearboxHeat(s)) : gearboxHeat(s);
+  s.heat = Math.min(1, Math.max(0, s.heat + (heatRate * s.overdrive + passive - od.coolPerSec * (1 - s.overdrive)) * dt));
   if (s.heat >= 1 && s.stall === 0) {
     s.stall = od.stallSeconds;
     s.overdrive = 0;
     s.crank = 0;
     stalled = true;
+    s.stats.stalls++;
+  }
+  if (s.overdrive > 0.9 && s.stall === 0) {
+    s.stats.holdNow += dt;
+    s.stats.maxHold = Math.max(s.stats.maxHold, s.stats.holdNow);
+  } else {
+    s.stats.holdNow = 0;
   }
 
   const target = s.stall > 0 ? 0 : motorRps(s);

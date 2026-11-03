@@ -3,6 +3,9 @@ import { CONFIG } from "./config";
 import {
   brassForReset,
   clockProgress,
+  gearboxCost,
+  gearboxHeat,
+  gearboxUnlocked,
   MAX_TIER,
   motorCost,
   overdriveUnlocked,
@@ -142,7 +145,9 @@ export type ReactionId =
   | "firstStall"
   | "stallAgain"
   | "firstBrass"
-  | "rebirthAgain";
+  | "rebirthAgain"
+  | "firstGearbox"
+  | "gearboxHot";
 
 export const REACTIONS: Record<ReactionId, { once: boolean; lines: Line[] }> = {
   firstStage: { once: true, lines: [L("proud", "¡Eso es! Mira cómo vuela ese piñón. Y cada etapa que añadas multiplicará todo lo de detrás.")] },
@@ -153,6 +158,14 @@ export const REACTIONS: Record<ReactionId, { once: boolean; lines: Line[] }> = {
   stallAgain: { once: false, lines: [L("worried", "Otra vez gripado… Ese motor necesita un radiador.")] },
   firstBrass: { once: true, lines: [L("proud", "Bien invertido. El latón nunca olvida.")] },
   rebirthAgain: { once: false, lines: [L("proud", "El horno ruge… ¡A empezar de nuevo, y más fuertes que antes!")] },
+  firstGearbox: {
+    once: true,
+    lines: [
+      L("surprised", "¡Una caja de cambios! En marcha larga esa etapa corre más… pero el motor se calienta solo."),
+      L("normal", "En marcha corta pierde algo de fuerza, pero ayuda a enfriar. Cambia de marcha según lo que necesites, como en una bicicleta."),
+    ],
+  },
+  gearboxHot: { once: false, lines: [L("worried", "El motor se calienta solo… Demasiadas marchas largas. Pon alguna en corta antes de que se gripe.")] },
 };
 
 // --- Consejos: cuando llevas un rato sin comprar, o si pulsas a Anselmo ---
@@ -170,6 +183,16 @@ export interface Tip {
 
 /** Por orden de prioridad: se dice el primero que se cumpla. */
 export const TIPS: Tip[] = [
+  {
+    id: "gearboxHot",
+    when: (s) => gearboxHeat(s) > CONFIG.overdrive.coolPerSec && s.stall === 0,
+    lines: [L("worried", "Con tantas marchas largas el motor no da abasto: acabará gripándose. Pasa alguna a corta.")],
+  },
+  {
+    id: "gearboxNew",
+    when: (s) => gearboxUnlocked(s) && s.shafts.every((sh) => !sh.gear) && stageCount(s) >= 3 && s.coins >= gearboxCost(stageCount(s)),
+    lines: [L("normal", "En el taller de engranajes ya puedes instalar cajas de cambios. Prueba con la última etapa.")],
+  },
   {
     id: "crank",
     when: (s) => s.motorLevel === 0 && s.coins < motorCost(0),

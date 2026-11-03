@@ -1,14 +1,17 @@
+import { checkAchievements } from "../sim/achievements";
 import { buyBrass, type BrassId } from "../sim/brass";
 import { CONFIG } from "../sim/config";
 import {
   applyBlueprints,
   buyAllTeeth,
+  buyGearbox,
   buyMotor,
   buyStage,
   buyTeeth,
   crank,
   incomePerSecond,
   rebirth,
+  setGear,
   shaftSpeeds,
   stageCount,
   tick,
@@ -33,7 +36,9 @@ export type GameEvent =
   | { type: "rebirth"; gain: number }
   | { type: "brass"; id: BrassId }
   | { type: "story"; id: string }
-  | { type: "event"; news: EventNews };
+  | { type: "event"; news: EventNews }
+  | { type: "achievement"; id: string }
+  | { type: "gearbox"; stage: number; installed: boolean };
 
 /** Cada cuánto se comprueban los hitos de la historia, en segundos de simulación. */
 const STORY_INTERVAL = 0.5;
@@ -90,6 +95,7 @@ export class Game {
     if (this.storyClock >= STORY_INTERVAL) {
       this.storyClock = 0;
       for (const id of checkStory(this.state)) this.emit({ type: "story", id });
+      for (const id of checkAchievements(this.state)) this.emit({ type: "achievement", id });
     }
   }
 
@@ -105,6 +111,7 @@ export class Game {
     const steps = Math.min(CONFIG.offline.maxSteps, Math.ceil(capped / CONFIG.tickSeconds));
     for (let i = 0; i < steps; i++) this.step(capped / steps);
     checkStory(s);
+    checkAchievements(s);
     this.quiet = false;
     this.input.overdriveHeld = held;
     this.revision++;
@@ -132,6 +139,21 @@ export class Game {
 
   buyStage(): void {
     if (buyStage(this.state)) this.bought("stage", stageCount(this.state), 1);
+  }
+
+  buyGearbox(stage: number): void {
+    if (!buyGearbox(this.state, stage)) return;
+    this.revision++;
+    this.speeds = shaftSpeeds(this.state);
+    this.emit({ type: "gearbox", stage, installed: true });
+  }
+
+  /** Cambia de marcha una etapa, o todas con stage = 0. */
+  setGear(stage: number, gear: 1 | 2): void {
+    if (setGear(this.state, stage, gear) === 0) return;
+    this.revision++;
+    this.speeds = shaftSpeeds(this.state);
+    this.emit({ type: "gearbox", stage, installed: false });
   }
 
   rebirth(): void {

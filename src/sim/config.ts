@@ -42,6 +42,22 @@ export const CONFIG = {
   /** Fundición: latón por cada engranaje construido en el ciclo. */
   brassPerStage: 1,
 
+  /**
+   * Cajas de cambios (tras el primer renacer). Marcha larga: más relación, pero el motor se calienta
+   * solo. Marcha corta: menos relación, pero ayuda a enfriarlo. El motor enfría overdrive.coolPerSec,
+   * así que caben unas cuatro largas sin gripar.
+   */
+  gearbox: {
+    long: 1.5,
+    short: 0.75,
+    heatPerSec: 0.03,
+    /** Coste de instalarla: coste de la etapa × esto. */
+    costFactor: 3,
+  },
+
+  /** Cada logro suma esto al multiplicador de ingresos. */
+  achievementBonus: 0.02,
+
   /** Niveles de dientes extra por nivel de Fresadora. */
   millLevels: 4,
 

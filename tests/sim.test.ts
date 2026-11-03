@@ -2,12 +2,17 @@ import { describe, expect, it } from "vitest";
 import { deserialize, serialize } from "../src/core/save";
 import { Game } from "../src/core/game";
 import { CONFIG } from "../src/sim/config";
+import { ACHIEVEMENTS, checkAchievements } from "../src/sim/achievements";
 import { buyBrass } from "../src/sim/brass";
 import { pickTip, STORY } from "../src/sim/dialogue";
 import { actOnEvent, countPurchase, makeRequest, spawnEvent, tickEvents } from "../src/sim/events";
 import { checkStory, claimReaction, clockProgress, ENDING_ID } from "../src/sim/story";
 import {
   brassForReset,
+  buyGearbox,
+  gearboxCost,
+  gearboxHeat,
+  setGear,
   crankImpulse,
   buyMotor,
   buyStage,
@@ -497,5 +502,99 @@ describe("resonancia", () => {
     const news = tickEvents(s, 0.05, false);
     expect(news).toContainEqual(expect.objectContaining({ type: "resolve", kind: "resonance" }));
     expect(s.events.buffs.some((b) => b.id === "resonance")).toBe(true);
+  });
+});
+
+describe("cajas de cambios", () => {
+  const ready = () => {
+    const s = newGame();
+    s.coins = 1e15;
+    buyMotor(s, 10);
+    for (let i = 0; i < 6; i++) buyStage(s);
+    s.motorSpeed = motorRps(s);
+    return s;
+  };
+
+  it("se desbloquean tras el primer renacer y cuestan dinero", () => {
+    const s = ready();
+    expect(buyGearbox(s, 1)).toBe(false);
+    s.rebirths = 1;
+    const coins = s.coins;
+    expect(buyGearbox(s, 1)).toBe(true);
+    expect(s.coins).toBeCloseTo(coins - gearboxCost(1));
+    expect(buyGearbox(s, 1)).toBe(false);
+  });
+
+  it("la marcha larga acelera, la corta frena, y se puede cambiar todas a la vez", () => {
+    const s = ready();
+    s.rebirths = 1;
+    const base = shaftSpeeds(s)[6];
+    buyGearbox(s, 2);
+    expect(shaftSpeeds(s)[6]).toBeCloseTo(base * CONFIG.gearbox.long);
+    expect(setGear(s, 2, 1)).toBe(1);
+    expect(shaftSpeeds(s)[6]).toBeCloseTo(base * CONFIG.gearbox.short);
+    buyGearbox(s, 3);
+    expect(setGear(s, 0, 2)).toBe(1);
+    expect(s.stats.gearShifts).toBe(2);
+  });
+
+  it("demasiadas marchas largas acaban gripando el motor sin sobremarcha", () => {
+    const s = ready();
+    s.rebirths = 1;
+    for (let i = 1; i <= 6; i++) buyGearbox(s, i);
+    expect(gearboxHeat(s)).toBeGreaterThan(CONFIG.overdrive.coolPerSec);
+    let stalled = false;
+    for (let t = 0; t < 120 && !stalled; t += 0.1) stalled = tick(s, { overdriveHeld: false }, 0.1).stalled;
+    expect(stalled).toBe(true);
+    // En corta, el motor se enfría.
+    setGear(s, 0, 1);
+    s.stall = 0;
+    s.heat = 0.5;
+    tick(s, { overdriveHeld: false }, 1);
+    expect(s.heat).toBeLessThan(0.5);
+  });
+});
+
+describe("logros y estadísticas", () => {
+  it("se consiguen una sola vez y cada uno suma ingresos", () => {
+    const s = newGame();
+    s.motorLevel = 1;
+    s.motorSpeed = 1;
+    const before = incomePerSecond(s);
+    const got = checkAchievements(s);
+    expect(got).toContain("motor1");
+    expect(checkAchievements(s)).toEqual([]);
+    expect(incomePerSecond(s)).toBeCloseTo(before * (1 + CONFIG.achievementBonus * got.length));
+  });
+
+  it("los ids de los logros son únicos", () => {
+    expect(new Set(ACHIEVEMENTS.map((a) => a.id)).size).toBe(ACHIEVEMENTS.length);
+  });
+
+  it("las estadísticas cuentan manivela, compras, gripados y sobremarcha", () => {
+    const s = newGame();
+    crank(s);
+    crank(s);
+    s.coins = 1e12;
+    buyMotor(s, 10);
+    for (let i = 0; i < 3; i++) buyStage(s);
+    buyTeeth(s, 1, 4);
+    expect(s.stats.crankClicks).toBe(2);
+    expect(s.stats.stagesBought).toBe(3);
+    expect(s.stats.teethBought).toBe(4);
+    run(s, 8, true);
+    expect(s.stats.stalls).toBe(1);
+    expect(s.stats.maxHold).toBeGreaterThan(4);
+  });
+
+  it("un guardado antiguo sin logros ni estadísticas se carga con valores iniciales", () => {
+    const old = JSON.parse(serialize(newGame()));
+    delete old.stats;
+    delete old.achievements;
+    delete old.settings.reduceMotion;
+    const s = deserialize(JSON.stringify(old));
+    expect(s.stats.crankClicks).toBe(0);
+    expect(s.achievements).toEqual([]);
+    expect(s.settings.reduceMotion).toBe(false);
   });
 });

@@ -122,6 +122,8 @@ export function addBuff(s: GameState, id: BuffId, mult: number, seconds: number)
 
 function attended(s: GameState): void {
   s.events.streak = Math.min(s.events.streak + 1, STREAK_CAP * 10);
+  s.stats.eventsResolved++;
+  s.stats.maxStreak = Math.max(s.stats.maxStreak, s.events.streak);
 }
 
 function missed(s: GameState): void {
@@ -337,6 +339,7 @@ export function tickEvents(s: GameState, dt: number, canSpawn: boolean, rng: Rng
         if (r.progress >= r.target) {
           s.coins += r.reward.coins;
           s.brass += r.reward.brass;
+          s.stats.requestsDone++;
           s.events.active = null;
           attended(s);
           news.push({ type: "resolve", kind: "request", outcome: "done", amount: r.reward.coins });
@@ -388,6 +391,7 @@ function expire(s: GameState, a: ActiveEvent): EventNews {
 
 function finishResonance(s: GameState, a: ActiveEvent): EventNews {
   const hits = a.hits ?? 0;
+  s.stats.bestResonance = Math.max(s.stats.bestResonance, hits);
   if (hits >= EVENTS.resonance.minHits) {
     const mult = Math.min(3, 1.5 + 0.3 * hits);
     addBuff(s, "resonance", mult, 30);
@@ -417,6 +421,7 @@ export function actOnEvent(s: GameState, action = "click", rng: Rng = Math.rando
 
   switch (a.kind) {
     case "golden": {
+      s.stats.goldenCaught++;
       const roll = rng();
       if (roll < 0.5 || (roll >= 0.85 && !overdriveUnlocked(s))) {
         const coins = income * E.golden.coinsSeconds;
@@ -439,6 +444,7 @@ export function actOnEvent(s: GameState, action = "click", rng: Rng = Math.rando
       if (a.hits! > 0) return { type: "progress", kind: "jam", amount: a.hits };
       if (a.elapsed <= E.jam.perfectWithin) {
         addBuff(s, "perfectRepair", E.jam.perfectMult, E.jam.perfectSeconds);
+        s.stats.perfectRepairs++;
         return done("perfect");
       }
       return done("fixed");
@@ -459,6 +465,7 @@ export function actOnEvent(s: GameState, action = "click", rng: Rng = Math.rando
       return done("oiled");
     case "unstable":
       addBuff(s, "unstable", a.mult!, E.unstable.seconds);
+      s.stats.bestUnstable = Math.max(s.stats.bestUnstable, a.mult!);
       return done("stabilized", a.mult);
     case "peddler": {
       const o = a.offer!;
@@ -478,6 +485,7 @@ export function actOnEvent(s: GameState, action = "click", rng: Rng = Math.rando
         addBuff(s, "mystery", 5, 30);
         return done("mystery");
       }
+      s.stats.peddlerJunk++;
       return done("junk");
     }
     case "resonance": {

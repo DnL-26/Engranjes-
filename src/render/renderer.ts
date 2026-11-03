@@ -1,9 +1,10 @@
 import type { Game, GameEvent } from "../core/game";
 import { CONFIG } from "../sim/config";
-import { globalMult, material, motorCount, motorRps, pinionTeeth, stageRatio, tierOf } from "../sim/economy";
+import { clockProgress, globalMult, material, motorCount, motorRps, pinionTeeth, stageRatio, tierOf } from "../sim/economy";
 import { fmt } from "../util/format";
 import type { Fx } from "./fx";
-import { computeLayout, FLYWHEEL_RADIUS, MODULE, pitchRadius, type ShaftLayout } from "./layout";
+import { computeLayout, FLYWHEEL_RADIUS, MODULE, pitchRadius, towerBounds, type ShaftLayout } from "./layout";
+import { Scenery } from "./scenery";
 
 const TAU = Math.PI * 2;
 /** Por debajo de tantos pasos por segundo (dientes, radios) se distinguen; por encima se funden. */
@@ -105,6 +106,11 @@ export class Renderer {
   /** Sentido de giro del eje que se está dibujando (los ejes alternan). */
   private spinDir = 1;
   private gearPaths = new Map<number, Path2D>();
+  private scenery = new Scenery();
+  private tower = { cx: 0, half: 200 };
+  private time = 0;
+  /** Celebración del final (campanadas, la cámara se aleja), de 1 a 0. */
+  private celebrate = 0;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -176,6 +182,10 @@ export class Renderer {
           this.flash = Math.max(this.flash, 0.25);
           break;
         case "story":
+          if (e.id === "final") {
+            this.celebrate = 1;
+            this.flash = 0.6;
+          }
           break;
         case "crank": {
           const l = this.layout[0];
@@ -205,6 +215,12 @@ export class Renderer {
     if (this.layoutRev === this.game.revision && this.layout.length === s.shafts.length) return;
     this.layoutRev = this.game.revision;
     this.layout = computeLayout(s);
+    this.tower = towerBounds(this.layout);
+    // La torre también envuelve el banco de motores, al pie del primer engranaje.
+    if (s.motorLevel > 0) {
+      const m = this.motorBox();
+      this.tower.half = Math.max(this.tower.half, Math.abs(m.x - this.tower.cx) + 40, Math.abs(m.x + m.w - this.tower.cx) + 40);
+    }
     for (let i = 0; i < this.layout.length; i++) {
       this.angles[i] ??= 0;
       this.pops[i] ??= 0;
@@ -243,7 +259,8 @@ export class Renderer {
   }
 
   private firstFollowed(): number {
-    return this.showAll ? 0 : Math.max(0, this.layout.length - FOLLOW_SHAFTS);
+    // Durante la celebración del final la cámara se aleja para enseñar la torre entera.
+    return this.showAll || this.celebrate > 0 ? 0 : Math.max(0, this.layout.length - FOLLOW_SHAFTS);
   }
 
   private advance(dt: number): void {
@@ -257,6 +274,8 @@ export class Renderer {
     this.shake = Math.max(0, this.shake - dt * 20);
     this.flash = Math.max(0, this.flash - dt * 0.8);
     this.lightning = Math.max(0, this.lightning - dt * 4);
+    this.celebrate = Math.max(0, this.celebrate - dt / 9);
+    this.time += dt;
   }
 
   private spawnContinuous(dt: number): void {
@@ -360,7 +379,7 @@ export class Renderer {
     if (from === 0 && this.game.state.motorLevel > 0) {
       const m = this.motorBox();
       minX = Math.min(minX, m.x);
-      minY = Math.min(minY, m.y);
+      maxX = Math.max(maxX, m.x + m.w);
       maxY = Math.max(maxY, m.y + m.h);
     }
     const area = this.availArea();
@@ -406,17 +425,28 @@ export class Renderer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.globalCompositeOperation = "source-over";
     ctx.globalAlpha = 1;
-    ctx.fillStyle = "#0f0d0b";
-    ctx.fillRect(0, 0, this.w, this.h);
-
     const a = this.availArea();
-    const sx = (Math.random() - 0.5) * this.shake;
-    const sy = (Math.random() - 0.5) * this.shake;
+    // Con "reducir destellos" no hay temblor de cámara y los destellos se atenúan mucho.
+    const calm = this.game.state.settings.reduceMotion;
+    const shake = calm ? 0 : this.shake;
+    const sx = (Math.random() - 0.5) * shake;
+    const sy = (Math.random() - 0.5) * shake;
     const scale = this.cam.scale;
     const ox = a.cx - this.cam.x * scale + sx;
     const oy = a.cy - this.cam.y * scale + sy;
 
-    this.drawGrid(ox, oy, scale);
+    const s = this.game.state;
+    const l0 = this.layout[0];
+    this.scenery.draw({
+      ctx, dpr, w: this.w, h: this.h, scale,
+      camX: this.cam.x, camY: this.cam.y, cx: a.cx + sx, cy: a.cy + sy,
+      time: this.time,
+      progress: clockProgress(s),
+      ended: s.story.ended,
+      tower: this.tower,
+      ground: l0.y + l0.extent + 100,
+      celebrate: this.celebrate,
+    });
 
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
     if (this.game.state.motorLevel > 0) this.drawMotor();
@@ -429,31 +459,13 @@ export class Renderer {
     this.drawFloaters(sx, sy);
     this.drawVignette();
     if (this.flash > 0) {
-      ctx.fillStyle = `rgba(255, 140, 50, ${this.flash * 0.7})`;
+      ctx.fillStyle = `rgba(255, 140, 50, ${this.flash * (calm ? 0.15 : 0.7)})`;
       ctx.fillRect(0, 0, this.w, this.h);
     }
-    if (this.lightning > 0) {
+    if (this.lightning > 0 && !calm) {
       ctx.fillStyle = `rgba(200, 220, 255, ${this.lightning * this.lightning * 0.35})`;
       ctx.fillRect(0, 0, this.w, this.h);
     }
-  }
-
-  private drawGrid(ox: number, oy: number, scale: number): void {
-    const ctx = this.ctx;
-    let step = 40 * scale;
-    while (step < 18) step *= 5;
-    ctx.strokeStyle = "rgba(120, 150, 190, 0.06)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = ((ox % step) + step) % step; x < this.w; x += step) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, this.h);
-    }
-    for (let y = ((oy % step) + step) % step; y < this.h; y += step) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(this.w, y);
-    }
-    ctx.stroke();
   }
 
   private drawVignette(): void {
@@ -473,17 +485,17 @@ export class Renderer {
     return Math.max(18, (l.wheelTeeth ? pitchRadius(l.wheelTeeth) : FLYWHEEL_RADIUS) * 0.75);
   }
 
-  /** Banco de motores a la izquierda del eje 0: una columna con un motor por cada uno comprado. */
+  /** Banco de motores al pie de la torre, bajo el eje 0: una fila con un motor por cada uno comprado. */
   private motorBox() {
     const l = this.layout[0];
     const count = Math.min(MAX_DRAWN_MOTORS, motorCount(this.game.state));
     const size = count === 1 ? 46 : 34;
     const gap = 8;
-    const h = count * size + (count - 1) * gap;
-    const x = l.x - l.extent - size - 30;
-    const y = l.y - h / 2;
-    const boxes = Array.from({ length: count }, (_, k) => ({ x, y: y + k * (size + gap), w: size, h: size }));
-    return { x, y, w: size, h, boxes };
+    const w = count * size + (count - 1) * gap;
+    const x = l.x - w / 2;
+    const y = l.y + l.extent + 24;
+    const boxes = Array.from({ length: count }, (_, k) => ({ x: x + k * (size + gap), y, w: size, h: size }));
+    return { x, y, w, h: size, boxes };
   }
 
   private drawMotor(): void {
@@ -497,7 +509,7 @@ export class Renderer {
     ctx.lineWidth = 5;
     ctx.beginPath();
     for (const b of m.boxes) {
-      ctx.moveTo(b.x + b.w, b.y + b.h / 2);
+      ctx.moveTo(b.x + b.w / 2, b.y);
       ctx.lineTo(l.x, l.y);
     }
     ctx.stroke();
@@ -565,6 +577,18 @@ export class Renderer {
     if (l.wheelTeeth) this.drawGear(l.wheelTeeth, angle, mat, rps, true);
     if (l.flywheel) this.drawFlywheel(angle, mat, rps);
     if (l.pinion) this.drawGear(pinionTeeth(s), angle, mat, rps, false);
+
+    // Caja de cambios: un aro alrededor del piñón, rojo en marcha larga y azul en corta.
+    const gear = s.shafts[i].gear ?? 0;
+    if (gear !== 0) {
+      ctx.strokeStyle = gear === 2 ? "#ff6a3a" : "#6ab0ff";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, pitchRadius(pinionTeeth(s)) + MODULE * 2.2, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
     // Brillo por velocidad real.
     const heat = heatOf(real);

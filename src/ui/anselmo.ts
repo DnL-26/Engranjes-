@@ -1,6 +1,7 @@
 import type { Game, GameEvent } from "../core/game";
 import { EVENT_LINES, FRAGMENTS, pickTip, REACTIONS, SMALL_TALK, type Expr, type Line, type ReactionId } from "../sim/dialogue";
-import { clockProgress, teethMaxed } from "../sim/economy";
+import { CONFIG } from "../sim/config";
+import { clockProgress, gearboxHeat, teethMaxed } from "../sim/economy";
 import { claimReaction, storyPage } from "../sim/story";
 import { anselmoSvg } from "./anselmoArt";
 import { byId, h, setText } from "./dom";
@@ -26,6 +27,7 @@ const READ_CHARS_PER_SECOND = 22;
 const AUTO_TIP_IDLE = 40;
 const TIP_COOLDOWN = 75;
 const STALL_COOLDOWN = 120;
+const HOT_COOLDOWN = 90;
 /** Como mucho tantas reacciones y consejos esperando: el resto se descarta, no se acumula. */
 const MAX_PENDING_CHATTER = 2;
 
@@ -55,6 +57,7 @@ export class AnselmoUI {
   private idle = 0;
   private sinceTip = 0;
   private sinceStall = STALL_COOLDOWN;
+  private sinceHot = HOT_COOLDOWN;
   private lastTip: string | undefined;
   private smallTalk = 0;
 
@@ -95,6 +98,10 @@ export class AnselmoUI {
           this.idle = 0;
           this.react("firstBrass");
           break;
+        case "gearbox":
+          this.idle = 0;
+          if (e.installed) this.react("firstGearbox");
+          break;
         case "rebirth":
           this.idle = 0;
           // La primera fundición ya la comenta la historia.
@@ -131,6 +138,7 @@ export class AnselmoUI {
     this.idle += dt;
     this.sinceTip += dt;
     this.sinceStall += dt;
+    this.sinceHot += dt;
 
     // La historia pendiente (también la desbloqueada offline) va de una en una.
     const storyBusy = this.current?.kind === "story" || this.queue.some((m) => m.kind === "story");
@@ -141,6 +149,11 @@ export class AnselmoUI {
     }
 
     if (s.overdrive > 0.6) this.react("firstOverdrive");
+    // Aviso si las marchas largas calientan el motor por sí solas (con pausa entre avisos).
+    if (gearboxHeat(s) > CONFIG.overdrive.coolPerSec && s.heat > 0.6 && s.stall === 0 && this.sinceHot >= HOT_COOLDOWN) {
+      this.sinceHot = 0;
+      this.react("gearboxHot");
+    }
 
     if (!this.current && this.queue.length === 0 && this.idle >= AUTO_TIP_IDLE && this.sinceTip >= TIP_COOLDOWN) {
       const tip = pickTip(s, { idle: this.idle }, this.lastTip);

@@ -128,9 +128,33 @@ girar la manivela / motor → los ejes giran → cada vuelta paga monedas
 - **Monedas:** los ejes lentos sueltan un "+1" en cada vuelta; los rápidos, chispas y un flujo continuo.
 - **Sonido:** tic al girar la manivela, clac al comprar, una campanilla al cambiar de material (más aguda cuanto mejor es el material) y un zumbido de fondo cuyo tono sigue a la velocidad del último eje.
 
+### Cajas de cambios
+- Se desbloquean tras el primer renacer. Se instalan por etapa en el taller (coste: 3× el de la etapa) y se reinician al fundir.
+- **Marcha larga:** relación ×1,5, pero el motor se calienta solo (+0,03/s por caja, aunque no haya sobremarcha). **Marcha corta:** relación ×0,75, y ayuda a enfriar (−0,03/s). El Radiador reduce ese calor.
+- Como el motor enfría 0,12/s, caben unas cuatro largas sin gripar. La decisión es cuánta velocidad fija aguantas frente a cuánto margen dejas para la sobremarcha, y conviene cambiar de marcha según el momento.
+- En el taller: botón por etapa (instalar, o Corta/Larga), cambio de todas a la vez y el calor neto de las marchas. En el tren, un aro rojo (larga) o azul (corta) alrededor del piñón. Anselmo avisa si el motor no da abasto.
+
+### Logros
+- 55 logros en `src/sim/achievements.ts` (progreso, etapas, velocidad, materiales, sobremarcha, fundición, cajas de cambios, eventos, historia y tiempo). Cada uno suma **+2% de ingresos** permanente.
+- Aviso arriba al conseguir uno. La ventana *Logros* reúne las estadísticas de la partida y la lista de logros (los pendientes se ven atenuados, con lo que hay que hacer).
+- Las estadísticas (`stats` en el estado) empiezan a contar desde esta versión; las partidas antiguas no tienen ese historial.
+
+### Accesibilidad y comodidad
+- **Destellos y temblores reducidos** (Ajustes): sin temblor de cámara, destellos muy atenuados, sin relámpagos y sin animaciones CSS. En una partida nueva se activa solo si el sistema pide reducir el movimiento.
+- **Atajos de teclado:** Espacio (manivela), Shift (sobremarcha), M (motor), E (engranaje), T (taller), F (fundición), L (logros), R (recuerdos), V (cámara), 1/2/3 (×1/×10/Máx) y Esc (cerrar). Listados en Ajustes.
+
+## La torre (fondo)
+- El tren **sube en vertical** por el interior de la torre del Gran Reloj, en zigzag, con los motores en fila al pie del primer engranaje.
+- **La torre:** dos pilares de ladrillo, un arco por planta (cada 420 unidades) por el que se ve el cielo, y una viga de madera en cada suelo. El interior se oscurece un poco para que los engranajes se lean bien. El ancho se ajusta a las ruedas, y la torre se dibuja por plantas sin límite de altura.
+- **El cielo cambia con la altura:** el pueblo al atardecer, los tejados, las nubes, el anochecer, la noche estrellada y, muy arriba, un **cosmos de engranajes** que se repite sin fin (el "infinito" del modo libre).
+- **El pueblo de Valdehierro** al pie de la torre: cuanto más cerca está el final, más ventanas encendidas.
+- **La esfera del Gran Reloj**, al fondo y a la derecha de la torre. Parado marca las once; al avanzar, el minutero da una vuelta hasta las doce y la esfera crece y empieza a brillar. Tras el final marca **la hora real**.
+- **Final:** cuatro campanadas, un destello y la cámara se aleja unos segundos para enseñar la torre entera.
+- Todo es procedural (baldosas con azar determinista y capas con paralaje), en `src/render/scenery.ts`.
+
 ## Interfaz
 - Sin panel lateral: el taller ocupa toda la pantalla.
-- Arriba: monedas a la izquierda, la barra del Gran Reloj en el centro y la velocidad de salida a la derecha. Debajo, botones pequeños: *Recuerdos*, *Ver todo el tren* y *Ajustes* (sonido, exportar, importar, borrar).
+- Arriba: monedas a la izquierda, la barra del Gran Reloj en el centro y la velocidad de salida a la derecha. Debajo, botones pequeños: *Recuerdos*, *Logros*, *Ver todo el tren* y *Ajustes* (sonido, exportar, importar, borrar).
 - Abajo, una barra con la manivela, cuatro botones y la sobremarcha:
   - **Mejorar motor:** compra niveles de motor.
   - **Engranajes:** abre el **taller**, una ventana con una fila por etapa (material, progreso, relación y botón de dientes), el selector ×1/×10/Máx y *Mejorar todo*. El botón muestra cuántas mejoras se pueden pagar.
@@ -139,7 +163,6 @@ girar la manivela / motor → los ejes giran → cada vuelta paga monedas
 - La cámara encuadra el tren en el hueco libre entre la barra superior y la inferior.
 
 ## Ideas para más adelante
-- **Cajas de cambios:** etapas especiales que alternan entre dos relaciones.
 - **Diferencial:** el tren se bifurca en dos ramas que luego se reúnen.
 - **Resonancia:** si varios ejes giran a velocidades cuyo cociente es entero, dan bonificación.
 - **Segunda capa de prestigio** para el modo libre, con mecánicas nuevas.
