@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Engranajes</title>
+  </head>
+  <body>
+    <div id="app">
+      <main id="stage">
+        <canvas id="world"></canvas>
+        <div id="topbar">
+          <div class="money">
+            <div id="coins">0</div>
+            <div id="income" class="muted">+0/s</div>
+            <div id="buffs"></div>
+          </div>
+          <div id="goal">
+            <div class="goal-head">
+              <span>El Gran Reloj</span>
+              <span id="goal-pct"></span>
+            </div>
+            <div class="bar goal-bar"><div id="goal-fill" class="fill"></div></div>
+            <div id="goal-meta" class="muted"></div>
+          </div>
+          <div class="tacho">
+            <span class="label">Salida</span>
+            <span id="rpm">0 RPM</span>
+            <span id="mult" class="muted"></span>
+          </div>
+        </div>
+        <div id="corner">
+          <button id="memories-btn" class="ghost">Recuerdos</button>
+          <button id="view-btn" class="ghost">Ver todo el tren</button>
+          <button id="settings-btn" class="ghost">Ajustes</button>
+        </div>
+        <div id="events"></div>
+        <div id="anselmo"></div>
+        <div id="dock">
+          <button id="crank-btn" title="Clic o Espacio">
+            <span class="icon">⟳</span>
+            <span>Manivela</span>
+          </button>
+          <div id="actions"></div>
+          <div id="od-wrap">
+            <button id="od-btn" title="Mantén pulsado o mantén Shift">
+              <span id="od-label">Sobremarcha</span>
+            </button>
+            <div class="heat"><div id="heat-fill"></div></div>
+          </div>
+        </div>
+        <div id="toast" hidden></div>
+      </main>
+    </div>
+    <div id="modal" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
