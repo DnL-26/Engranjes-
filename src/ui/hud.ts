@@ -32,7 +32,47 @@ import { clockProgress } from "../sim/story";
 import { heatOf, heatRgb } from "../render/renderer";
 import { EVENTS } from "../sim/events";
 import { fmt, fmtDuration, fmtRpm } from "../util/format";
-import { byId, h, setText, showModal } from "./dom";
+import { byId, h, setText, showModal, tooltip } from "./dom";
+import { gearPlusIcon, icon, withIcon, type IconName } from "./icons";
+import type { BrassId } from "../sim/brass";
+
+/** Icono de cada parte de la historia, en la lista de Recuerdos. */
+const STORY_ICONS: Record<string, IconName> = {
+  intro: "voice",
+  motor: "motor",
+  overdrive: "overdrive",
+  quantum: "gem",
+  foundry: "rebirth",
+  brass: "brass",
+  tremor: "bell",
+  lastpage: "hourglass",
+  final: "clock",
+};
+
+const BRASS_ICONS: Record<BrassId, IconName> = {
+  motors: "motor",
+  pinion: "gear",
+  mill: "drill",
+  alloy: "flask",
+  blueprints: "scroll",
+  radiator: "snow",
+  turbo: "rocket",
+  automaton: "automaton",
+};
+
+/** Icono de un logro según su familia (por el prefijo de su id). */
+function achievementIcon(id: string): IconName {
+  const table: [string, IconName][] = [
+    ["firstTurn", "crank"], ["crank", "crank"], ["motors3", "motor"], ["motor", "motor"],
+    ["stages", "layers"], ["rps", "overdrive"], ["bronze", "gem"], ["steel", "gem"], ["quantum", "gem"],
+    ["maxTeeth", "gear"], ["pinion6", "gear"], ["stall", "warning"], ["hold", "timer"],
+    ["rebirth", "rebirth"], ["bigMelt", "brass"], ["automaton", "automaton"], ["gearbox", "gearbox"],
+    ["shift", "gearbox"], ["golden", "coins"], ["perfect", "wrench"], ["request", "handshake"],
+    ["streak", "target"], ["unstable", "activity"], ["resonance", "wave"], ["junk", "wipe"],
+    ["fragments", "ghost"], ["ending", "bell"], ["hour", "hourglass"],
+  ];
+  return table.find(([prefix]) => id.startsWith(prefix))?.[1] ?? "achievements";
+}
 
 interface HudActions {
   load(json: string): void;
@@ -42,6 +82,7 @@ interface HudActions {
   /** Anselmo vuelve a contar una parte de la historia. */
   retell(id: string): void;
   setReduceMotion(on: boolean): void;
+  setVolumes(v: { music: number; sfx: number; ambient: number }): void;
 }
 
 interface StageRow {
@@ -92,10 +133,10 @@ export class Hud {
   private achievementQueue: string[] = [];
   private achievementTimer = 0;
 
-  private motor = this.action("Mejorar motor", () => this.game.buyMotor(this.amount));
-  private gears = this.action("Engranajes", () => this.openWorkshop());
-  private stage = this.action("Añadir engranaje", () => this.game.buyStage());
-  private foundry = this.action("Renacer", () => this.openFoundry());
+  private motor = this.action("Mejorar motor", icon("motor"), () => this.game.buyMotor(this.amount));
+  private gears = this.action("Engranajes", icon("gear"), () => this.openWorkshop());
+  private stage = this.action("Añadir engranaje", gearPlusIcon(), () => this.game.buyStage());
+  private foundry = this.action("Renacer", icon("rebirth"), () => this.openFoundry());
 
   constructor(
     private game: Game,
@@ -103,13 +144,31 @@ export class Hud {
   ) {
     this.foundry.btn.classList.add("foundry");
     byId("actions").replaceChildren(this.motor.btn, this.gears.btn, this.stage.btn, this.foundry.btn);
-    byId("view-btn").addEventListener("click", (e) => {
+    this.decorateStatic();
+    const viewBtn = byId("view-btn");
+    viewBtn.addEventListener("click", () => {
       const all = this.actions.toggleView();
-      setText(e.currentTarget as HTMLElement, all ? "Seguir la salida" : "Ver todo el tren");
+      viewBtn.replaceChildren(all ? withIcon("follow", "Seguir la salida") : withIcon("viewAll", "Ver todo el tren"));
     });
     byId("memories-btn").addEventListener("click", () => this.openMemories());
     byId("settings-btn").addEventListener("click", () => this.openSettings());
     byId("achievements-btn").addEventListener("click", () => this.openAchievements());
+  }
+
+  /** Iconos para los elementos fijos de index.html (barra superior, esquina, manivela, sobremarcha). */
+  private decorateStatic(): void {
+    byId("memories-btn").replaceChildren(withIcon("memories", "Recuerdos"));
+    byId("achievements-btn").replaceChildren(withIcon("achievements", "Logros"));
+    byId("view-btn").replaceChildren(withIcon("viewAll", "Ver todo el tren"));
+    byId("settings-btn").replaceChildren(withIcon("settings", "Ajustes"));
+    byId("crank-btn").querySelector(".icon")?.replaceChildren(icon("crank"));
+    const od = byId("od-btn");
+    od.insertBefore(icon("overdrive", "od-icon"), od.firstChild);
+    const coinsRow = h("div", { class: "coins-row" }, icon("coins", "coins-ic"));
+    this.coins.replaceWith(coinsRow);
+    coinsRow.append(this.coins);
+    document.querySelector(".tacho .label")?.prepend(icon("overdrive"));
+    document.querySelector(".goal-head span")?.prepend(icon("clock"));
   }
 
   /** Atajos de teclado (sin ventanas abiertas). Devuelve true si la tecla hizo algo. */
@@ -162,7 +221,7 @@ export class Hud {
       return;
     }
     this.achievementEl.replaceChildren(
-      h("span", { class: "ach-star" }, "★"),
+      h("span", { class: "ach-star" }, icon("achievements")),
       h("span", {}, h("span", { class: "ach-label" }, "Logro: "), a.name),
       h("span", { class: "ach-bonus" }, `+${Math.round(CONFIG.achievementBonus * 100)}%`),
     );
@@ -173,12 +232,12 @@ export class Hud {
     this.achievementTimer = window.setTimeout(() => this.nextAchievement(), 3200);
   }
 
-  private action(title: string, onClick: () => void): ActionButton {
+  private action(title: string, ic: Node, onClick: () => void): ActionButton {
     const sub = h("span", { class: "a-sub" });
     const cost = h("span", { class: "a-cost" });
     const badge = h("span", { class: "a-badge" });
     const btn = h("button", { class: "action", onclick: onClick },
-      h("span", { class: "a-title" }, title, badge), sub, cost);
+      h("span", { class: "a-title" }, h("span", { class: "a-icon" }, ic), h("span", { class: "a-name" }, title), badge), sub, cost);
     return { btn, sub, cost, badge };
   }
 
@@ -199,7 +258,7 @@ export class Hud {
   // --- Ventanas ---
 
   /** Abre una ventana cuyo contenido se actualiza cada frame mientras está abierta. */
-  private openLive(title: string, build: (root: HTMLElement) => () => void, extra: HTMLElement[] = []): void {
+  private openLive(title: string | Node, build: (root: HTMLElement) => () => void, extra: HTMLElement[] = []): void {
     const root = h("div", { class: "live" });
     const update = build(root);
     showModal(title, [...extra, root], [{ label: "Cerrar", primary: true }], {
@@ -214,15 +273,15 @@ export class Hud {
 
   private openWorkshop(): void {
     const g = this.game;
-    const buyAll = h("button", { class: "buy wide-btn", onclick: () => g.buyAllTeeth() }, "Mejorar todo lo que alcance (lo más barato primero)");
+    const buyAll = h("button", { class: "buy wide-btn", onclick: () => g.buyAllTeeth() }, withIcon("wrench", "Mejorar todo lo que alcance (lo más barato primero)"));
     const heatInfo = h("span", { class: "muted" });
     const gearBar = h("div", { class: "gear-bar" },
-      h("span", { class: "gear-bar-title" }, "Marchas"),
+      h("span", { class: "gear-bar-title" }, withIcon("gearbox", "Marchas")),
       h("button", { class: "buy gear-short", onclick: () => g.setGear(0, 1) }, "Todas cortas"),
       h("button", { class: "buy gear-long", onclick: () => g.setGear(0, 2) }, "Todas largas"),
       heatInfo,
     );
-    this.openLive("Taller de engranajes", (root) => {
+    this.openLive(withIcon("gear", "Taller de engranajes"), (root) => {
       let rows: StageRow[] = [];
       let built = -1;
       return () => {
@@ -280,7 +339,7 @@ export class Hud {
     row.long.onclick = () => this.game.setGear(i, 2);
     row.gearRow.append(row.install, row.short, row.long);
     h("div", { class: "card stage-row" },
-      h("div", { class: "card-head" }, h("span", { class: "title" }, `Etapa ${i}`), row.chip),
+      h("div", { class: "card-head" }, h("span", { class: "title" }, withIcon("gear", `Etapa ${i}`, "stage-title")), row.chip),
       row.meta,
       h("div", { class: "tier-row" }, h("div", { class: "bar" }, row.fill), row.next),
       row.btn,
@@ -298,6 +357,7 @@ export class Hud {
     const m = material(tier);
     setText(c.chip, m.name);
     c.chip.style.setProperty("--c", m.color);
+    c.btn.parentElement?.style.setProperty("--mat", m.color);
     const p = pinionTeeth(s);
     setText(c.meta, `×${stageRatio(s, c.shaft).toFixed(2)} · ${wheelTeeth(sh.teethLevel)}:${p} dientes · ${fmtRpm(g.speeds[c.shaft] ?? 0)}`);
     if (tier >= MAX_TIER) {
@@ -353,66 +413,75 @@ export class Hud {
     const brass = h("div", { class: "brass-amount big" });
     const info = h("p", { class: "muted" });
     const gainEl = h("p", { class: "big-gain" });
-    const meltLabel = h("span", {});
-    const melt = h("button", { class: "buy wide-btn", onclick: () => this.confirmRebirth() }, meltLabel);
-    const shopTitle = h("h3", { class: "section-title" }, "Tienda de latón");
-    this.openLive("Fundición", (root) => {
-      const rows = BRASS.map((d) => {
-        const level = h("span", { class: "muted" });
-        const now = h("div", { class: "meta" });
-        const next = h("div", { class: "meta next-effect" });
-        const cost = h("span", { class: "cost" });
-        const btn = h("button", { class: "buy", onclick: () => g.buyBrass(d.id) }, h("span", {}, "Mejorar"), cost);
-        const extra = h("div", {});
-        if (d.id === "automaton") {
-          const toggle = h("label", { class: "toggle" });
-          const box = h("input", { type: "checkbox", checked: g.state.settings.automaton });
-          box.onchange = () => {
-            g.state.settings.automaton = box.checked;
-          };
-          toggle.append(box, " Autómata encendido");
-          extra.append(toggle);
-        }
-        root.append(h("div", { class: "card" }, h("div", { class: "card-head" }, h("span", { class: "title" }, d.name), level), now, next, btn, extra));
-        return { d, level, now, next, cost, btn, extra };
+    const melt = h("button", { class: "buy wide-btn", onclick: () => this.confirmRebirth() }, withIcon("rebirth", "Fundir el tren y renacer"));
+    const shopTitle = h("h3", { class: "section-title" }, withIcon("store", "Tienda de latón"));
+    this.openLive(withIcon("rebirth", "Fundición"), (root) => {
+      // Tienda: botones cuadrados con icono y nombre; el detalle va en el tooltip.
+      const grid = h("div", { class: "shop-grid" });
+      const tiles = BRASS.map((d) => {
+        const tile = h("button", { class: "shop-tile", ariaLabel: d.name, onclick: () => g.buyBrass(d.id) },
+          h("span", { class: "shop-icon" }, icon(BRASS_ICONS[d.id])),
+          h("span", { class: "shop-name" }, d.name),
+        );
+        tooltip(tile, () => this.brassTip(d.id));
+        grid.append(tile);
+        return { d, tile };
       });
+      const autoToggle = h("label", { class: "toggle" });
+      const autoBox = h("input", { type: "checkbox", checked: g.state.settings.automaton });
+      autoBox.onchange = () => {
+        g.state.settings.automaton = autoBox.checked;
+      };
+      autoToggle.append(autoBox, " Autómata encendido");
+      root.append(grid, autoToggle);
       return () => {
         const s = g.state;
         const gain = brassForReset(s);
-        setText(brass, `${fmt(s.brass)} de latón`);
+        brass.replaceChildren(withIcon("brass", `${fmt(s.brass)} de latón`));
         setText(info, s.freeStages > 0
           ? `Cada engranaje que construyas en este ciclo vale 1 de latón (los ${s.freeStages} de los Planos no cuentan). Puedes renacer cuando quieras.`
           : "Cada engranaje que construyas en este ciclo vale 1 de latón. Puedes renacer cuando quieras: pierdes el tren, pero el latón compra mejoras permanentes.");
         setText(gainEl, `+${fmt(gain)} de latón`);
-        setText(meltLabel, "Fundir el tren y renacer");
         melt.classList.toggle("affordable", gain > 0);
-        for (const r of rows) {
-          const lvl = brassLevel(s, r.d.id);
-          setText(r.level, r.d.max === Infinity ? `nivel ${lvl}` : `${lvl}/${r.d.max}`);
-          setText(r.now, r.d.effect(lvl));
-          r.extra.hidden = lvl === 0;
-          if (brassMaxed(s, r.d.id)) {
-            setText(r.next, "");
-            setText(r.cost, "Al máximo");
-            r.btn.disabled = true;
-            r.btn.classList.remove("affordable");
-          } else {
-            setText(r.next, `→ ${r.d.effect(lvl + 1)}`);
-            const c = brassCost(s, r.d.id);
-            setText(r.cost, `${fmt(c)} latón`);
-            r.btn.disabled = false;
-            r.btn.classList.toggle("affordable", c <= s.brass);
-          }
+        for (const { d, tile } of tiles) {
+          const maxed = brassMaxed(s, d.id);
+          tile.classList.toggle("maxed", maxed);
+          tile.classList.toggle("affordable", !maxed && brassCost(s, d.id) <= s.brass);
         }
+        autoToggle.hidden = brassLevel(s, "automaton") === 0;
       };
     }, [brass, info, gainEl, melt, shopTitle]);
+  }
+
+  /** Contenido del tooltip de una mejora de latón: qué hace, nivel, ahora → siguiente y precio. */
+  private brassTip(id: BrassId): Node[] {
+    const s = this.game.state;
+    const d = BRASS.find((x) => x.id === id)!;
+    const lvl = brassLevel(s, id);
+    const out: Node[] = [
+      h("div", { class: "tip-title" }, withIcon(BRASS_ICONS[id], d.name)),
+      h("p", { class: "tip-desc" }, d.desc),
+      h("div", { class: "tip-row" }, h("span", { class: "muted" }, "Nivel"), d.max === Infinity ? String(lvl) : `${lvl} / ${d.max}`),
+      h("div", { class: "tip-row" }, h("span", { class: "muted" }, "Ahora"), d.effect(lvl)),
+    ];
+    if (brassMaxed(s, id)) {
+      out.push(h("div", { class: "tip-cost maxed" }, "Al máximo"));
+    } else {
+      const cost = brassCost(s, id);
+      out.push(
+        h("div", { class: "tip-row" }, h("span", { class: "muted" }, "Siguiente"), d.effect(lvl + 1)),
+        h("div", { class: cost <= s.brass ? "tip-cost ok" : "tip-cost short" },
+          withIcon("brass", `${fmt(cost)} de latón${cost <= s.brass ? " · clic para comprar" : ` · tienes ${fmt(s.brass)}`}`)),
+      );
+    }
+    return out;
   }
 
   private confirmRebirth(): void {
     const s = this.game.state;
     const gain = brassForReset(s);
     const keep = s.brassUpgrades.blueprints ? ` Los Planos te devuelven ${brassLevel(s, "blueprints")} etapas al empezar.` : "";
-    showModal("Fundir el tren", [
+    showModal(withIcon("rebirth", "Fundir el tren"), [
       h("p", {}, `Echarás al horno el tren entero: monedas, motor, etapas y materiales de este ciclo.${keep}`),
       h("p", {}, "Conservas el latón, sus mejoras, los recuerdos de Anselmo y tu récord de velocidad."),
       h("p", { class: "big-gain" }, `+${fmt(gain)} de latón`),
@@ -432,11 +501,12 @@ export class Hud {
 
   private openSettings(): void {
     const s = this.game.state;
-    const mute = h("button", {}, s.settings.muted ? "Activar sonido" : "Silenciar");
+    const muteLabel = () => (s.settings.muted ? withIcon("sfx", "Activar todo el sonido") : withIcon("muted", "Silenciar todo"));
+    const mute = h("button", {}, muteLabel());
     mute.onclick = () => {
       s.settings.muted = !s.settings.muted;
       this.actions.setMuted(s.settings.muted);
-      setText(mute, s.settings.muted ? "Activar sonido" : "Silenciar");
+      mute.replaceChildren(muteLabel());
     };
     const exportBtn = h("button", {
       onclick: () => {
@@ -444,7 +514,7 @@ export class Hud {
         showModal("Exportar partida", [h("p", {}, "Copia este texto para guardar tu partida:"), area], [{ label: "Cerrar", primary: true }]);
         area.select();
       },
-    }, "Exportar partida");
+    }, withIcon("exportSave", "Exportar partida"));
     const importBtn = h("button", {
       onclick: () => {
         const area = h("textarea", { rows: 6, placeholder: "Pega aquí una partida exportada" });
@@ -465,7 +535,7 @@ export class Hud {
         ]);
         area.focus();
       },
-    }, "Importar partida");
+    }, withIcon("importSave", "Importar partida"));
     const wipe = h("button", {
       class: "danger",
       onclick: () =>
@@ -473,12 +543,13 @@ export class Hud {
           { label: "Cancelar", primary: true },
           { label: "Borrar", onClick: () => this.actions.wipe() },
         ]),
-    }, "Borrar partida");
-    const motion = h("button", {}, s.settings.reduceMotion ? "Destellos y temblores: reducidos" : "Destellos y temblores: normales");
+    }, withIcon("wipe", "Borrar partida"));
+    const motionLabel = () => (s.settings.reduceMotion ? withIcon("calm", "Destellos y temblores: reducidos") : withIcon("flashy", "Destellos y temblores: normales"));
+    const motion = h("button", {}, motionLabel());
     motion.onclick = () => {
       s.settings.reduceMotion = !s.settings.reduceMotion;
       this.actions.setReduceMotion(s.settings.reduceMotion);
-      setText(motion, s.settings.reduceMotion ? "Destellos y temblores: reducidos" : "Destellos y temblores: normales");
+      motion.replaceChildren(motionLabel());
     };
     const keys: [string, string][] = [
       ["Clic / Espacio", "Manivela"],
@@ -494,9 +565,24 @@ export class Hud {
       ["Esc", "Cerrar ventana"],
     ];
     const shortcuts = h("div", { class: "shortcuts" }, ...keys.map(([k, d]) => h("div", {}, h("kbd", {}, k), h("span", {}, d))));
-    showModal("Ajustes", [
+    // Mezclador: un deslizador por bus; se aplica al momento y se guarda con la partida.
+    const slider = (label: string, ic: IconName, key: "music" | "sfx" | "ambient") => {
+      const value = h("span", { class: "mixer-value" }, `${Math.round(s.settings.volume[key] * 100)}%`);
+      const input = h("input", { type: "range", min: "0", max: "100", step: "1", value: String(Math.round(s.settings.volume[key] * 100)) });
+      input.oninput = () => {
+        s.settings.volume[key] = Number(input.value) / 100;
+        setText(value, `${input.value}%`);
+        this.actions.setVolumes(s.settings.volume);
+      };
+      return h("label", { class: "mixer-row" }, withIcon(ic, label), input, value);
+    };
+    const mixer = h("div", { class: "mixer" }, slider("Música", "music", "music"), slider("Efectos", "sfx", "sfx"), slider("Ambiente", "ambient", "ambient"));
+    showModal(withIcon("settings", "Ajustes"), [
+      h("h3", { class: "section-title" }, withIcon("sfx", "Sonido")),
+      mixer,
+      h("h3", { class: "section-title" }, withIcon("settings", "Opciones")),
       h("div", { class: "settings-list" }, mute, motion, exportBtn, importBtn, wipe),
-      h("h3", { class: "section-title" }, "Atajos de teclado"),
+      h("h3", { class: "section-title" }, withIcon("keyboard", "Atajos de teclado")),
       shortcuts,
     ], [{ label: "Cerrar", primary: true }], { wide: true });
   }
@@ -516,10 +602,10 @@ export class Hud {
             close();
             this.actions.retell(page.id);
           },
-        }, seen ? page.title : "· · ·"),
+        }, seen ? withIcon(STORY_ICONS[page.id] ?? "memories", page.title) : withIcon("lock", "Aún no recordado")),
       );
     }
-    close = showModal("Recuerdos de Anselmo", [h("p", { class: "muted" }, "Elige un recuerdo y Anselmo te lo volverá a contar."), list], [{ label: "Cerrar", primary: true }]);
+    close = showModal(withIcon("memories", "Recuerdos de Anselmo"), [h("p", { class: "muted" }, "Elige un recuerdo y Anselmo te lo volverá a contar."), list], [{ label: "Cerrar", primary: true }]);
   }
 
   /** Logros (con su bonus) y estadísticas de la partida. */
@@ -549,14 +635,14 @@ export class Hud {
       ...ACHIEVEMENTS.map((a) => {
         const got = s.achievements.includes(a.id);
         return h("div", { class: got ? "ach got" : "ach" },
-          h("span", { class: "ach-star" }, got ? "★" : "☆"),
+          h("span", { class: "ach-icon" }, icon(got ? achievementIcon(a.id) : "lock")),
           h("span", { class: "ach-text" }, h("span", { class: "ach-name" }, a.name), h("span", { class: "ach-desc" }, a.desc)),
         );
       }),
     );
-    showModal("Logros y estadísticas", [
+    showModal(withIcon("achievements", "Logros y estadísticas"), [
       h("div", { class: "stats-grid" }, ...stats.map(([k, v]) => h("div", {}, h("span", { class: "muted" }, k), h("span", {}, v)))),
-      h("h3", { class: "section-title" }, `Logros: ${done}/${ACHIEVEMENTS.length} · ${achievementBonusText(s)}`),
+      h("h3", { class: "section-title" }, withIcon("achievements", `Logros: ${done}/${ACHIEVEMENTS.length} · ${achievementBonusText(s)}`)),
       grid,
     ], [{ label: "Cerrar", primary: true }], { wide: true });
   }
@@ -564,7 +650,7 @@ export class Hud {
   /** Pantalla de fin, cuando Anselmo termina de contar el final. */
   showEnding(): void {
     const s = this.game.state;
-    showModal("FIN", [
+    showModal(withIcon("bell", "FIN"), [
       h("p", { class: "quote" }, "El Gran Reloj de Valdehierro vuelve a dar la hora."),
       h("div", { class: "stats" },
         h("div", {}, h("span", { class: "muted" }, "Tiempo de juego"), fmtDuration(s.story.endTime || s.timeAll)),
@@ -634,7 +720,7 @@ export class Hud {
     this.odBtn.classList.toggle("engaged", s.overdrive > 0.05);
     if (!unlocked) setText(this.odLabel, `Sobremarcha (etapa ${CONFIG.overdrive.unlockStages})`);
     else if (s.stall > 0) setText(this.odLabel, `Gripado · ${Math.ceil(s.stall)} s`);
-    else setText(this.odLabel, s.overdrive > 0.05 ? `Sobremarcha ×${(1 + (overdriveMax(s) - 1) * s.overdrive).toFixed(1)}` : "Sobremarcha (mantén)");
+    else setText(this.odLabel, s.overdrive > 0.05 ? `Sobremarcha ×${(1 + (overdriveMax(s) - 1) * s.overdrive).toFixed(1)}` : "Sobremarcha");
     this.heatFill.style.width = `${(s.heat * 100).toFixed(1)}%`;
     this.heatFill.classList.toggle("hot", s.heat > 0.75);
 

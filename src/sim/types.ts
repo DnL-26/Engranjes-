@@ -92,6 +92,8 @@ export interface GameState {
     automaton: boolean;
     /** Atenúa destellos, relámpagos, temblores de cámara y animaciones (fotosensibilidad). */
     reduceMotion: boolean;
+    /** Mezclador: volumen de cada bus, de 0 a 1. */
+    volume: { music: number; sfx: number; ambient: number };
   };
 }
 

@@ -10,6 +10,7 @@ import { newGame } from "./sim/economy";
 import type { GameState } from "./sim/types";
 import { ENDING_ID } from "./sim/dialogue";
 import type { EventNews } from "./sim/events";
+import type { Zone } from "./audio/music";
 import { AnselmoUI } from "./ui/anselmo";
 import { EventsUI } from "./ui/events";
 import { byId, isModalOpen } from "./ui/dom";
@@ -48,10 +49,11 @@ const save = () => {
 
 const sound = new Sound();
 sound.setMuted(game.state.settings.muted);
+sound.setVolumes(game.state.settings.volume);
 const fx = new Fx();
 const canvas = byId<HTMLCanvasElement>("world");
 const renderer = new Renderer(canvas, game, fx);
-renderer.onRev = (i) => sound.tick(1 + i * 0.15);
+renderer.onRev = () => sound.coin();
 
 // La cámara encuadra el tren en el hueco que dejan libre la barra superior y la de botones.
 const stage = byId("stage");
@@ -81,6 +83,7 @@ const hud = new Hud(game, {
     location.reload();
   },
   setMuted: (m) => sound.setMuted(m),
+  setVolumes: (v) => sound.setVolumes(v),
   toggleView: () => (renderer.showAll = !renderer.showAll),
   retell: (id) => anselmo.retell(id),
   setReduceMotion: (on) => document.body.classList.toggle("reduce-motion", on),
@@ -134,17 +137,29 @@ window.addEventListener("blur", () => setOverdrive(false));
 
 // --- Bucle ---
 
+/** Tras el final, el vals suena con las campanas del reloj durante un rato. */
+const FINALE_MUSIC_MS = 60_000;
+let finaleUntil = 0;
+
+/** Capa de la música según la altura de la salida en la torre (los mismos tramos que el cielo). */
+function musicZone(): Zone {
+  if (performance.now() < finaleUntil) return 4;
+  const alt = renderer.topAltitude();
+  return alt < 900 ? 0 : alt < 3200 ? 1 : alt < 8000 ? 2 : 3;
+}
+
 function playEventSound(n: EventNews): void {
   if (n.type === "spawn") {
     if (n.kind === "bell") sound.bell();
     else if (n.kind === "storm") sound.thunder();
+    else if (n.kind === "golden") sound.golden();
     else sound.chime(7);
   } else if (n.type === "progress") {
     if (n.kind === "jam") sound.tick(1.6);
     else sound.chime(n.amount === -1 ? 0 : 3 + (n.amount ?? 0));
   } else if (n.type === "resolve") {
-    sound.chime(9);
-    sound.clunk();
+    sound.chime(6);
+    sound.coin();
   } else if (n.kind === "unstable") {
     sound.stall();
   }
@@ -158,7 +173,7 @@ const catchUp = (seconds: number) => {
 if (loaded) catchUp((Date.now() - loaded.lastSaved) / 1000);
 
 // Acceso desde la consola para depurar; no existe en el build de producción.
-if (import.meta.env.DEV) Object.assign(window, { __game: game, __fx: fx, __renderer: renderer });
+if (import.meta.env.DEV) Object.assign(window, { __game: game, __fx: fx, __renderer: renderer, __sound: sound });
 
 // En desarrollo, ?speed=10 acelera la simulación para probar el balance.
 const speed = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get("speed")) || 1 : 1;
@@ -171,13 +186,16 @@ startLoop({
     lastFrame = t;
     const events = game.drainEvents();
     for (const e of events) {
-      if (e.type === "buy") sound.clunk();
-      else if (e.type === "tier") sound.chime(e.tier);
+      if (e.type === "buy") {
+        if (e.what === "stage") sound.stagePlaced();
+        else sound.ratchet();
+      } else if (e.type === "tier") sound.gear(e.tier);
       else if (e.type === "stall") sound.stall();
       else if (e.type === "crank") sound.tick(0.7);
       else if (e.type === "rebirth") sound.foundry();
       else if (e.type === "brass") sound.chime(6);
       else if (e.type === "story" && e.id === ENDING_ID) {
+        finaleUntil = performance.now() + FINALE_MUSIC_MS;
         // El Gran Reloj vuelve a dar la hora: doce campanadas serían demasiadas; con cuatro basta.
         for (let k = 0; k < 4; k++) setTimeout(() => sound.bell(), k * 1400);
       } else if (e.type === "story") sound.chime(4);
@@ -195,13 +213,19 @@ startLoop({
     hud.update();
     anselmo.update(dt);
     eventsUi.frame();
-    sound.updateHum(game.speeds[game.speeds.length - 1] ?? 0, game.state.overdrive);
+    sound.update({
+      rps: game.speeds[game.speeds.length - 1] ?? 0,
+      overdrive: game.state.overdrive,
+      stalled: game.state.stall > 0,
+      zone: musicZone(),
+    }, dt);
   },
   catchUp,
 }, speed);
 
 setInterval(save, AUTOSAVE_MS);
 document.addEventListener("visibilitychange", () => {
+  sound.setHidden(document.visibilityState === "hidden");
   if (document.visibilityState === "hidden") save();
 });
 window.addEventListener("beforeunload", save);

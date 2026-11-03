@@ -398,6 +398,12 @@ export class Renderer {
     this.cam.scale = Math.exp(Math.log(this.cam.scale) + (Math.log(scale) - Math.log(this.cam.scale)) * k);
   }
 
+  /** Altura de la salida en la torre (unidades de mundo): decide la capa de la música. */
+  topAltitude(): number {
+    const last = this.layout[this.layout.length - 1];
+    return last ? -last.y : 0;
+  }
+
   /** Posición en pantalla (px del escenario) de un eje y su radio, para colocar botones encima. */
   shaftScreen(i: number): { x: number; y: number; r: number } | null {
     const l = this.layout[i];

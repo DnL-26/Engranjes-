@@ -17,7 +17,7 @@ export function deserialize(json: string): GameState {
   return {
     ...base,
     ...f,
-    settings: { ...base.settings, ...f.settings },
+    settings: { ...base.settings, ...f.settings, volume: { ...base.settings.volume, ...f.settings?.volume } },
     story: { ...base.story, ...f.story },
     events: { ...base.events, ...f.events },
     stats: { ...base.stats, ...f.stats },

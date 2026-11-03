@@ -24,6 +24,69 @@ export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   return el as T;
 }
 
+// --- Tooltip ---
+
+let tipEl: HTMLElement | null = null;
+let tipOwner: Element | null = null;
+
+function tipNode(): HTMLElement {
+  if (!tipEl) {
+    tipEl = h("div", { class: "tooltip", hidden: true, role: "tooltip" });
+    document.body.append(tipEl);
+  }
+  return tipEl;
+}
+
+/** Coloca el tooltip junto al puntero sin salirse de la ventana. */
+function placeTip(x: number, y: number): void {
+  const t = tipNode();
+  const pad = 12;
+  const w = t.offsetWidth;
+  const hgt = t.offsetHeight;
+  const left = x + 16 + w > window.innerWidth - pad ? x - 16 - w : x + 16;
+  const top = y + 18 + hgt > window.innerHeight - pad ? y - 12 - hgt : y + 18;
+  t.style.left = `${Math.max(pad, left)}px`;
+  t.style.top = `${Math.max(pad, top)}px`;
+}
+
+export function hideTooltip(): void {
+  tipOwner = null;
+  if (tipEl) tipEl.hidden = true;
+}
+
+/**
+ * Descripción flotante al pasar el ratón (o al enfocar con el teclado). `render` se llama al
+ * mostrarla y tras cada clic, para que refleje el estado del momento.
+ */
+export function tooltip(el: HTMLElement, render: () => Child[]): void {
+  const show = (x: number, y: number) => {
+    const t = tipNode();
+    tipOwner = el;
+    t.replaceChildren(...render());
+    t.hidden = false;
+    placeTip(x, y);
+  };
+  el.addEventListener("pointerenter", (e) => {
+    if (e.pointerType !== "touch") show(e.clientX, e.clientY);
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (tipOwner === el) placeTip(e.clientX, e.clientY);
+  });
+  el.addEventListener("pointerleave", () => {
+    if (tipOwner === el) hideTooltip();
+  });
+  el.addEventListener("focus", () => {
+    const r = el.getBoundingClientRect();
+    show(r.right, r.top);
+  });
+  el.addEventListener("blur", () => {
+    if (tipOwner === el) hideTooltip();
+  });
+  el.addEventListener("click", () => {
+    if (tipOwner === el) tipNode().replaceChildren(...render());
+  });
+}
+
 export interface ModalAction {
   label: string;
   primary?: boolean;
@@ -38,7 +101,7 @@ export function isModalOpen(): boolean {
 
 /** Modal propio: Electron no soporta window.prompt, así que no lo usamos. Esc lo cierra. */
 export function showModal(
-  title: string,
+  title: string | Node,
   body: Child | Child[],
   actions: ModalAction[],
   opts: { wide?: boolean; onClose?: () => void } = {},
@@ -49,6 +112,7 @@ export function showModal(
     if (e.key === "Escape") close();
   };
   const close = () => {
+    hideTooltip();
     root.hidden = true;
     root.replaceChildren();
     window.removeEventListener("keydown", onKey);

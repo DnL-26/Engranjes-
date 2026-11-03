@@ -152,6 +152,32 @@ girar la manivela / motor → los ejes giran → cada vuelta paga monedas
 - **Final:** cuatro campanadas, un destello y la cámara se aleja unos segundos para enseñar la torre entera.
 - Todo es procedural (baldosas con azar determinista y capas con paralaje), en `src/render/scenery.ts`.
 
+## Sonido y música
+Todo se sintetiza con WebAudio: no hay archivos de audio. Hay tres buses (música, efectos y ambiente) con su volumen en **Ajustes → Sonido**, guardado con la partida. Con la pestaña oculta, el audio se suspende.
+
+### Música: vals de relojería
+- Compás de 3/4 en re mayor, a 132 pulsaciones por minuto. Dos frases de 8 compases que se alternan sobre la progresión Re–Sim–Sol–La–Re–Sol–Mim–La. El tic-tac del reloj hace de percusión.
+- **Capas según la altura de la salida en la torre** (los mismos tramos que el cielo); los cambios entran a principio de compás:
+  - **Taller** (< 900): caja de música y tic-tac.
+  - **Nubes** (< 3200): bajo de vals "um-pa-pa" en cuerdas punteadas, y adornos.
+  - **Noche** (< 8000): colchón de acordes, arpegios de celesta con eco, y cada cuarta frase la melodía pasa a la celesta.
+  - **Cosmos**: todo una octava más alto, con ecos largos y el tic-tac casi apagado.
+  - **Final**: durante un minuto tras el final, el vals completo con las campanas del Gran Reloj.
+- **Sobremarcha:** la música se acelera (hasta ×1,3) y sube hasta 3 semitonos según cuánto esté metida.
+- **Gripado:** se frena y baja de tono como un tocadiscos al apagarse, se apaga tras un filtro y vuelve a arrancar al recuperarse el motor.
+
+### Efectos (todos en re mayor)
+- **Material nuevo:** suena a su material: madera (golpe sordo), cobre o bronce, hierro o acero, cristal (campanilla), plasma (zumbido eléctrico) y estelar o cuántico (arpegio de campanas). Como mucho unos ocho por segundo, para las cascadas.
+- **Monedas** de los ejes lentos: notas de marimba que suben por la pentatónica si se encadenan.
+- **Compras:** trinquete al comprar dientes o motor; doble golpe de engrane y una quinta al añadir etapa.
+- **Engranaje dorado:** arpegio brillante. **Campanada:** campana grave en re. **Tormenta:** trueno.
+- **Voz de Anselmo:** sílabas de vapor (un soplido con formante y un tono suave por debajo).
+
+### Ambiente
+Zumbido de la maquinaria según la velocidad, más un fondo por altura: murmullo y pájaros en el pueblo, viento entre las nubes, grillos de noche, un brillo casi inaudible en el cosmos y la plaza celebrando en el final.
+
+Código en `src/audio/` (`synth.ts`, `music.ts`, `ambience.ts` y `sound.ts`).
+
 ## Interfaz
 - Sin panel lateral: el taller ocupa toda la pantalla.
 - Arriba: monedas a la izquierda, la barra del Gran Reloj en el centro y la velocidad de salida a la derecha. Debajo, botones pequeños: *Recuerdos*, *Logros*, *Ver todo el tren* y *Ajustes* (sonido, exportar, importar, borrar).
@@ -160,7 +186,19 @@ girar la manivela / motor → los ejes giran → cada vuelta paga monedas
   - **Engranajes:** abre el **taller**, una ventana con una fila por etapa (material, progreso, relación y botón de dientes), el selector ×1/×10/Máx y *Mejorar todo*. El botón muestra cuántas mejoras se pueden pagar.
   - **Añadir engranaje:** compra la etapa siguiente.
   - **Renacer:** siempre disponible. Muestra el latón que darías (1 por engranaje) y abre la **fundición**, con el botón para renacer y la tienda de latón debajo.
+  - **Tienda de latón:** una cuadrícula de botones cuadrados con icono y nombre. Al pasar el ratón (o al enfocar con el teclado), un tooltip explica la mejora, su nivel, el efecto actual y el siguiente, y el precio (dorado si alcanza, rojo si no). El botón se ilumina si se puede comprar y se atenúa al máximo; un clic compra.
 - La cámara encuadra el tren en el hueco libre entre la barra superior y la inferior.
+- **Iconos** (Lucide, licencia ISC) en todo lo que se pulsa o se lee de un vistazo:
+  - **Barra inferior:** motor (ventilador), engranajes (rueda dentada), añadir engranaje (rueda con un "+" verde), renacer (llama), sobremarcha (cuentarrevoluciones) y manivela (flecha circular).
+  - **Barra superior y esquina:** monedas, velocidad, el Gran Reloj, recuerdos, logros, cámara y ajustes.
+  - **Recuerdos:** un icono por parte de la historia; las aún no desbloqueadas llevan candado.
+  - **Logros:** el icono de su familia en un disco dorado; los pendientes, candado y atenuados.
+  - **Ajustes:** mezclador, opciones y atajos.
+  - **Tienda de latón:** un icono por mejora.
+  - **Mejoras activas, racha, pedidos y chatarrero.**
+- En el taller, el engranaje de cada etapa toma el color de su material.
+- Los iconos se nombran por su significado en `src/ui/icons.ts`, para poder cambiar el dibujo sin tocar la interfaz.
+- Barras de desplazamiento finas en tonos latón y sin flechas.
 
 ## Ideas para más adelante
 - **Diferencial:** el tren se bifurca en dos ramas que luego se reúnen.

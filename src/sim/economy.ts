@@ -39,7 +39,7 @@ export function newGame(): GameState {
     achievements: [],
     stats: newStats(),
     lastSaved: Date.now(),
-    settings: { muted: false, automaton: true, reduceMotion: false },
+    settings: { muted: false, automaton: true, reduceMotion: false, volume: { music: 0.7, sfx: 0.8, ambient: 0.6 } },
   };
 }
 

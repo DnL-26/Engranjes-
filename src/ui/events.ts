@@ -4,6 +4,7 @@ import { EVENTS, type ActiveEvent, type Request } from "../sim/events";
 import { fragmentMult, streakMult, type BuffId } from "../sim/modifiers";
 import { fmt, fmtRpm } from "../util/format";
 import { byId, h, setText } from "./dom";
+import { icon, withIcon, type IconName } from "./icons";
 
 const BUFF_NAMES: Record<BuffId, string> = {
   frenzy: "Frenesí",
@@ -15,6 +16,18 @@ const BUFF_NAMES: Record<BuffId, string> = {
   mystery: "Engranaje misterioso",
   bell: "Campanada: manivela ×50",
   storm: "Tormenta: sin calor",
+};
+
+const BUFF_ICONS: Record<BuffId, IconName> = {
+  frenzy: "zap",
+  perfectRepair: "wrench",
+  oiled: "droplet",
+  unstable: "activity",
+  resonance: "wave",
+  elixir: "flask",
+  mystery: "mystery",
+  bell: "bell",
+  storm: "storm",
 };
 
 const GEAR_ICON = `<svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="13" fill="#ffd36b" stroke="#a87a1a" stroke-width="7" stroke-dasharray="5 4"/><circle cx="20" cy="20" r="9" fill="#ffe7a0"/><circle cx="20" cy="20" r="3.5" fill="#a87a1a"/></svg>`;
@@ -94,7 +107,7 @@ export class EventsUI {
       }
       case "jam": {
         const count = h("span", {});
-        const btn = h("button", { class: "ev-tag ev-jam", onclick: act() }, h("span", { class: "ev-tag-icon" }, "⚒"), count);
+        const btn = h("button", { class: "ev-tag ev-jam", onclick: act() }, icon("wrench", "ev-tag-icon"), count);
         this.mount(btn, () => {
           this.placeOnShaft(btn, a.stage!, 0);
           setText(count, `¡Atasco! ${a.hits} golpes`);
@@ -118,7 +131,7 @@ export class EventsUI {
       }
       case "unstable": {
         const mult = h("span", { class: "ev-mult" });
-        const btn = h("button", { class: "ev-tag ev-unstable", onclick: act("stabilize") }, mult, h("span", {}, "Estabilizar"));
+        const btn = h("button", { class: "ev-tag ev-unstable", onclick: act("stabilize") }, icon("activity", "ev-tag-icon"), mult, h("span", {}, "Estabilizar"));
         this.mount(btn, () => {
           this.placeOnShaft(btn, a.stage!, 0);
           setText(mult, `×${a.mult!.toFixed(1)}`);
@@ -163,7 +176,7 @@ export class EventsUI {
     const reject = h("button", { class: "buy", onclick: () => this.game.actOnEvent("reject") }, "No, gracias");
     const fill = h("div", { class: "fill" });
     const card = h("div", { class: "ev-card ev-peddler" },
-      h("div", { class: "ev-card-title" }, "El chatarrero"),
+      h("div", { class: "ev-card-title" }, withIcon("store", "El chatarrero")),
       h("p", {}, desc),
       h("div", { class: "ev-card-actions" }, reject, accept),
       h("div", { class: "bar" }, fill),
@@ -185,7 +198,7 @@ export class EventsUI {
       ? `Premio: ${fmt(r.reward.coins)} monedas y ${r.reward.brass} de latón`
       : `Premio: ${fmt(r.reward.coins)} monedas`;
     const card = h("div", { class: "ev-card ev-request" },
-      h("div", { class: "ev-card-title" }, `Pedido de ${r.who}`),
+      h("div", { class: "ev-card-title" }, withIcon("handshake", `Pedido de ${r.who}`)),
       goal,
       h("div", { class: "bar ev-req-bar" }, fill),
       h("div", { class: "ev-req-foot" }, progress, time),
@@ -223,13 +236,13 @@ export class EventsUI {
       const label = b.mult !== 1 ? `${BUFF_NAMES[b.id]} ×${fmt(b.mult)}` : BUFF_NAMES[b.id];
       const bar = h("div", { class: "buff-bar" });
       bar.style.width = `${pct.toFixed(1)}%`;
-      chips.push(h("div", { class: `buff buff-${b.id}` }, h("span", {}, `${label} · ${Math.ceil(b.timeLeft)} s`), bar));
+      chips.push(h("div", { class: `buff buff-${b.id}` }, withIcon(BUFF_ICONS[b.id], `${label} · ${Math.ceil(b.timeLeft)} s`), bar));
       if (b.id === "bell") bannerText = "¡Campanada! Gira la manivela: cada vuelta vale ×50";
       if (b.id === "storm") bannerText = "¡Tormenta! La sobremarcha no calienta";
     }
-    if (s.events.streak > 0) chips.push(h("div", { class: "buff buff-streak" }, `Racha ${s.events.streak} · ×${streakMult(s).toFixed(2)}`));
+    if (s.events.streak > 0) chips.push(h("div", { class: "buff buff-streak" }, withIcon("target", `Racha ${s.events.streak} · ×${streakMult(s).toFixed(2)}`)));
     if (s.events.fragments > 0) {
-      chips.push(h("div", { class: "buff buff-fragments" }, `Recuerdos ${s.events.fragments}/${EVENTS.maxFragments} · ×${fragmentMult(s).toFixed(2)}`));
+      chips.push(h("div", { class: "buff buff-fragments" }, withIcon("ghost", `Recuerdos ${s.events.fragments}/${EVENTS.maxFragments} · ×${fragmentMult(s).toFixed(2)}`)));
     }
     // Reconstruir los chips cada frame es barato (son pocos) y evita llevar la cuenta de cuáles cambian.
     this.buffsEl.replaceChildren(...chips);

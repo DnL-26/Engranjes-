@@ -162,13 +162,13 @@ button {
 #dock {
   position: absolute;
   bottom: 20px;
-  left: 16px;
-  right: 16px;
+  left: 10px;
+  right: 10px;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-items: flex-end;
-  gap: 14px;
+  gap: 10px;
 }
 
 #actions {
@@ -179,7 +179,7 @@ button {
 }
 
 button.action {
-  width: 150px;
+  width: 160px;
   min-height: 74px;
   display: flex;
   flex-direction: column;
@@ -1415,4 +1415,407 @@ kbd {
   font-size: 12px;
   text-align: center;
   white-space: nowrap;
+}
+
+/* --- Mezclador --- */
+
+.mixer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.mixer-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.mixer-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+
+.mixer-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* --- Iconos --- */
+
+.ic {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  stroke-width: 2;
+  vertical-align: -0.14em;
+}
+
+.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+
+.with-icon > .ic {
+  color: var(--gold);
+}
+
+.ic-stack {
+  position: relative;
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+}
+
+.ic-stack > .ic {
+  width: 100%;
+  height: 100%;
+}
+
+.ic-badge {
+  position: absolute;
+  right: -0.32em;
+  bottom: -0.28em;
+  width: 0.62em;
+  height: 0.62em;
+  border-radius: 50%;
+  background: #8fd06a;
+  color: #10200a;
+  display: grid;
+  place-items: center;
+}
+
+.ic-badge .ic {
+  width: 0.5em;
+  height: 0.5em;
+  stroke-width: 3.5;
+}
+
+/* Barra inferior: icono grande y dorado delante del título. */
+button.action .a-title {
+  justify-content: flex-start;
+  gap: 7px;
+  align-items: center;
+}
+
+.a-icon {
+  display: inline-flex;
+  font-size: 19px;
+  color: var(--gold);
+}
+
+button.action.foundry .a-icon {
+  color: #ff9a4a;
+}
+
+.a-name {
+  flex: 1;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+
+#crank-btn .icon .ic {
+  width: 30px;
+  height: 30px;
+  stroke-width: 2.4;
+}
+
+#od-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.od-icon {
+  font-size: 20px;
+  color: #ffb070;
+}
+
+.coins-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coins-ic {
+  font-size: 30px;
+  color: var(--gold);
+}
+
+.tacho .label .ic,
+.goal-head .ic {
+  margin-right: 4px;
+}
+
+#corner .with-icon > .ic {
+  font-size: 14px;
+}
+
+/* Ventanas */
+.modal-card h2 .with-icon > .ic {
+  font-size: 20px;
+}
+
+.section-title .with-icon > .ic {
+  font-size: 16px;
+}
+
+.settings-list button .with-icon > .ic {
+  font-size: 17px;
+}
+
+.settings-list button.danger .with-icon > .ic {
+  color: var(--danger);
+}
+
+.mixer-row .with-icon {
+  font-size: 13px;
+}
+
+.notebook .page .with-icon > .ic {
+  font-size: 18px;
+}
+
+.notebook .page.locked .with-icon > .ic {
+  color: var(--muted);
+}
+
+.stage-title > .ic {
+  color: var(--mat, var(--gold)) !important;
+  font-size: 17px;
+}
+
+.shop-title > .ic {
+  font-size: 18px;
+}
+
+.brass-amount .with-icon > .ic {
+  color: #e8b45a;
+}
+
+/* Logros: icono en un disco; los pendientes, con candado y apagados. */
+.ach-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  background: #15120e;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.ach.got .ach-icon {
+  background: #3a2e1a;
+  border-color: var(--gold-dim);
+  color: var(--gold);
+}
+
+#achievement-toast .ach-star .ic {
+  font-size: 18px;
+}
+
+/* Mejoras activas y eventos */
+.buff .with-icon > .ic {
+  color: inherit;
+  font-size: 13px;
+}
+
+.ev-card-title .with-icon > .ic {
+  font-size: 17px;
+  color: inherit;
+}
+
+.ev-tag-icon {
+  font-size: 18px;
+}
+
+/* --- Tienda de latón: cuadrícula de botones cuadrados --- */
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+button.shop-tile {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #15120e;
+  color: var(--muted);
+  transition: transform 0.08s, border-color 0.15s, background 0.15s;
+}
+
+.shop-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #201a13;
+  border: 1px solid var(--line);
+  font-size: 26px;
+  color: var(--muted);
+}
+
+.shop-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+}
+
+button.shop-tile.affordable {
+  border-color: var(--gold-dim);
+  background: linear-gradient(#2e2416, #1a140d);
+  color: var(--text);
+}
+
+button.shop-tile.affordable .shop-icon {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+  background: #3a2e1a;
+}
+
+button.shop-tile.maxed {
+  opacity: 0.55;
+}
+
+button.shop-tile.maxed .shop-icon {
+  color: #b8e0a0;
+  border-color: #5a7a4a;
+}
+
+button.shop-tile:hover,
+button.shop-tile:focus-visible {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+button.shop-tile:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* --- Tooltip --- */
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  max-width: 280px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(20, 17, 13, 0.97);
+  border: 1px solid var(--gold-dim);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  font-size: 12.5px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.tip-title {
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.tip-title .ic {
+  color: var(--gold);
+}
+
+.tip-desc {
+  margin: 0;
+  line-height: 1.4;
+  color: #d8ccb0;
+}
+
+.tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tip-row > :last-child {
+  text-align: right;
+}
+
+.tip-cost {
+  margin-top: 3px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-weight: 700;
+}
+
+.tip-cost.ok {
+  color: var(--gold);
+}
+
+.tip-cost.short {
+  color: var(--danger);
+}
+
+.tip-cost.short .ic {
+  color: var(--danger);
+}
+
+.tip-cost.maxed {
+  color: #b8e0a0;
+}
+
+/* --- Barras de desplazamiento: finas y en tonos latón --- */
+
+/* Firefox no tiene ::-webkit-scrollbar; en Chrome, las propiedades estándar anularían el estilo de
+   abajo y volverían a dibujar las flechas de Windows. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #6b5136 transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #6b5136;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--gold-dim);
+}
+
+::-webkit-scrollbar-button,
+::-webkit-scrollbar-corner {
+  display: none;
+}
+
+.modal-body {
+  padding-right: 6px;
 }

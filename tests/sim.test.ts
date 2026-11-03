@@ -592,7 +592,9 @@ describe("logros y estadísticas", () => {
     delete old.stats;
     delete old.achievements;
     delete old.settings.reduceMotion;
+    delete old.settings.volume;
     const s = deserialize(JSON.stringify(old));
+    expect(s.settings.volume).toEqual({ music: 0.7, sfx: 0.8, ambient: 0.6 });
     expect(s.stats.crankClicks).toBe(0);
     expect(s.achievements).toEqual([]);
     expect(s.settings.reduceMotion).toBe(false);
