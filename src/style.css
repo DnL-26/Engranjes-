@@ -1819,3 +1819,91 @@ button.shop-tile:active {
 .modal-body {
   padding-right: 6px;
 }
+
+/* --- Taller: etapas en cuadrícula (misma estética que la tienda de latón) --- */
+
+button.stage-tile {
+  position: relative;
+  gap: 6px;
+}
+
+/* El engranaje toma el color del material; el aro que lo rodea se llena hacia el siguiente. */
+.stage-icon {
+  --ring: conic-gradient(var(--mat, var(--gold)) var(--p, 0%), #2a2219 0);
+  position: relative;
+  color: var(--mat, var(--muted)) !important;
+  border: none !important;
+  background: #1a1510 !important;
+}
+
+.stage-icon::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: var(--ring);
+  -webkit-mask: radial-gradient(circle, transparent 27px, #000 28px);
+  mask: radial-gradient(circle, transparent 27px, #000 28px);
+}
+
+button.stage-tile.affordable .stage-icon {
+  background: #2a2216 !important;
+}
+
+.shop-sub {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+button.stage-tile.affordable .shop-sub {
+  color: var(--gold);
+}
+
+.stage-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gear-pill {
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #120f0b;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gear-pill:hover {
+  filter: brightness(1.3);
+}
+
+.gear-pill.affordable {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+}
+
+.gear-pill.long {
+  border-color: #ff6a3a;
+  color: #ffd6c6;
+  background: #3a1a10;
+}
+
+.gear-pill.short {
+  border-color: #6ab0ff;
+  color: #cfe6ff;
+  background: #16263a;
+}
+
+.workshop-hint {
+  font-size: 12px;
+  margin: 4px 0 0;
+}

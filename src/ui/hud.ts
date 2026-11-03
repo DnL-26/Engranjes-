@@ -32,7 +32,7 @@ import { clockProgress } from "../sim/story";
 import { heatOf, heatRgb } from "../render/renderer";
 import { EVENTS } from "../sim/events";
 import { fmt, fmtDuration, fmtRpm } from "../util/format";
-import { byId, h, setText, showModal, tooltip } from "./dom";
+import { byId, h, refreshTooltip, setText, showModal, tooltip } from "./dom";
 import { gearPlusIcon, icon, withIcon, type IconName } from "./icons";
 import type { BrassId } from "../sim/brass";
 
@@ -85,21 +85,14 @@ interface HudActions {
   setVolumes(v: { music: number; sfx: number; ambient: number }): void;
 }
 
-interface StageRow {
+/** Una etapa en el taller: botón cuadrado (compra dientes) con su selector de marcha. */
+interface StageTile {
   shaft: number;
-  chip: HTMLElement;
-  meta: HTMLElement;
-  fill: HTMLElement;
-  next: HTMLElement;
-  btn: HTMLButtonElement;
-  label: HTMLElement;
-  cost: HTMLElement;
-  /** Caja de cambios: instalar, o elegir marcha. */
-  gearRow: HTMLElement;
-  install: HTMLButtonElement;
-  installCost: HTMLElement;
-  short: HTMLButtonElement;
-  long: HTMLButtonElement;
+  /** El botón de la etapa con su selector de marcha debajo. */
+  cell: HTMLElement;
+  tile: HTMLButtonElement;
+  ratio: HTMLElement;
+  gear: HTMLButtonElement;
 }
 
 /** Un botón de la barra inferior: título, una línea de detalle y un precio. */
@@ -281,23 +274,27 @@ export class Hud {
       h("button", { class: "buy gear-long", onclick: () => g.setGear(0, 2) }, "Todas largas"),
       heatInfo,
     );
+    let frames = 0;
     this.openLive(withIcon("gear", "Taller de engranajes"), (root) => {
-      let rows: StageRow[] = [];
+      let tiles: StageTile[] = [];
       let built = -1;
+      const grid = h("div", { class: "shop-grid workshop-grid" });
       return () => {
         const s = g.state;
         if (built !== s.shafts.length) {
           built = s.shafts.length;
-          rows = [];
           root.replaceChildren();
-          if (stageCount(s) === 0) root.append(h("p", { class: "muted" }, "Aún no hay engranajes. Añade el primero con el botón «Añadir engranaje»."));
-          for (let i = stageCount(s); i >= 1; i--) {
-            const row = this.stageRow(i);
-            rows.push(row);
-            root.append(row.btn.parentElement!);
+          tiles = [];
+          if (stageCount(s) === 0) {
+            root.append(h("p", { class: "muted" }, "Aún no hay engranajes. Añade el primero con el botón «Añadir engranaje»."));
+          } else {
+            // La etapa más nueva primero: es la que más se mejora.
+            for (let i = stageCount(s); i >= 1; i--) tiles.push(this.stageTile(i));
+            grid.replaceChildren(...tiles.map((t) => t.cell));
+            root.append(grid, h("p", { class: "muted workshop-hint" }, "Clic en una etapa: más dientes. Pasa el ratón por encima para ver los detalles."));
           }
         }
-        for (const r of rows) this.updateStageRow(r);
+        for (const t of tiles) this.updateStageTile(t);
         buyAll.classList.toggle("affordable", this.affordableTeethCount() > 0);
         gearBar.hidden = !gearboxUnlocked(s);
         const heat = gearboxHeat(s);
@@ -306,6 +303,8 @@ export class Hud {
           ? `Calor de las marchas: +${heat.toFixed(2)}/s. ¡El motor no da abasto!`
           : `Calor de las marchas: ${heat >= 0 ? "+" : ""}${heat.toFixed(2)}/s (el motor enfría ${cool.toFixed(2)}/s)`);
         heatInfo.classList.toggle("danger-text", heat > cool);
+        // El tooltip de una etapa muestra su velocidad: se refresca unas veces por segundo.
+        if (++frames % 15 === 0) refreshTooltip();
       };
     }, [
       h("p", { class: "muted" }, "Más dientes en una rueda = el piñón que mueve gira más rápido. La relación de cada etapa multiplica todo lo que viene detrás."),
@@ -315,87 +314,97 @@ export class Hud {
     ]);
   }
 
-  private stageRow(i: number): StageRow {
-    const row: StageRow = {
-      shaft: i,
-      chip: h("span", { class: "chip" }),
-      meta: h("div", { class: "meta" }),
-      fill: h("div", { class: "fill" }),
-      next: h("span", { class: "next muted" }),
-      label: h("span", {}),
-      cost: h("span", { class: "cost" }),
-      btn: h("button", { class: "buy" }),
-      gearRow: h("div", { class: "gear-row" }),
-      install: h("button", { class: "buy" }),
-      installCost: h("span", { class: "cost" }),
-      short: h("button", { class: "gear-btn gear-short" }, `Corta ×${CONFIG.gearbox.short}`),
-      long: h("button", { class: "gear-btn gear-long" }, `Larga ×${CONFIG.gearbox.long}`),
+  private stageTile(i: number): StageTile {
+    const ratio = h("span", { class: "shop-sub" });
+    // Selector de marcha: un botón propio debajo de la etapa (instalar caja, o larga ↔ corta).
+    const gear = h("button", { class: "gear-pill" });
+    gear.onclick = () => {
+      const current = gearOf(this.game.state, i);
+      if (current === 0) this.game.buyGearbox(i);
+      else this.game.setGear(i, current === 2 ? 1 : 2);
     };
-    row.btn.append(row.label, row.cost);
-    row.btn.onclick = () => this.game.buyTeeth(i, this.amount);
-    row.install.append(h("span", {}, "Instalar caja de cambios"), row.installCost);
-    row.install.onclick = () => this.game.buyGearbox(i);
-    row.short.onclick = () => this.game.setGear(i, 1);
-    row.long.onclick = () => this.game.setGear(i, 2);
-    row.gearRow.append(row.install, row.short, row.long);
-    h("div", { class: "card stage-row" },
-      h("div", { class: "card-head" }, h("span", { class: "title" }, withIcon("gear", `Etapa ${i}`, "stage-title")), row.chip),
-      row.meta,
-      h("div", { class: "tier-row" }, h("div", { class: "bar" }, row.fill), row.next),
-      row.btn,
-      row.gearRow,
+    const tile = h("button", { class: "shop-tile stage-tile", ariaLabel: `Etapa ${i}`, onclick: () => this.game.buyTeeth(i, this.amount) },
+      h("span", { class: "shop-icon stage-icon" }, icon("gear")),
+      h("span", { class: "shop-name" }, `Etapa ${i}`),
+      ratio,
     );
-    return row;
+    tooltip(tile, () => this.stageTip(i));
+    const cell = h("div", { class: "stage-cell" }, tile, gear);
+    return { shaft: i, cell, tile, ratio, gear };
   }
 
-  private updateStageRow(c: StageRow): void {
-    const g = this.game;
-    const s = g.state;
-    const sh = s.shafts[c.shaft];
+  private updateStageTile(t: StageTile): void {
+    const s = this.game.state;
+    const sh = s.shafts[t.shaft];
     if (!sh) return;
+    const m = material(tierOf(sh.revs));
+    // Color del material en el engranaje, y un anillo con el avance hacia el siguiente material.
+    t.tile.style.setProperty("--mat", m.color);
+    t.tile.style.setProperty("--p", `${(this.tierProgress(sh.revs) * 100).toFixed(1)}%`);
+    setText(t.ratio, `×${stageRatio(s, t.shaft).toFixed(2)}`);
+    const maxed = teethMaxed(s, t.shaft);
+    t.tile.classList.toggle("maxed", maxed);
+    t.tile.classList.toggle("affordable", !maxed && teethBulk(s, t.shaft, this.amount).cost <= s.coins);
+
+    const gear = gearOf(s, t.shaft);
+    t.gear.hidden = !gearboxUnlocked(s);
+    t.gear.classList.toggle("short", gear === 1);
+    t.gear.classList.toggle("long", gear === 2);
+    t.gear.classList.toggle("affordable", gear === 0 && gearboxCost(t.shaft) <= s.coins);
+    setText(t.gear, gear === 0
+      ? `+ Caja · ${fmt(gearboxCost(t.shaft))}`
+      : gear === 2 ? `Marcha larga ×${CONFIG.gearbox.long}` : `Marcha corta ×${CONFIG.gearbox.short}`);
+    t.gear.title = gear === 0
+      ? `Instalar caja de cambios: ${fmt(gearboxCost(t.shaft))} monedas`
+      : `Marcha ${gear === 2 ? "larga" : "corta"}: clic para cambiar`;
+  }
+
+  /** Avance (0–1) de un eje hacia su siguiente material. */
+  private tierProgress(revs: number): number {
+    const tier = tierOf(revs);
+    if (tier >= MAX_TIER) return 1;
+    const lo = tier === 0 ? 0 : 10 ** tier;
+    const hi = 10 ** (tier + 1);
+    return Math.min(1, Math.max(0, (revs - lo) / (hi - lo)));
+  }
+
+  /** Tooltip de una etapa: material, relación, velocidad, marcha y la próxima mejora de dientes. */
+  private stageTip(i: number): Node[] {
+    const s = this.game.state;
+    const sh = s.shafts[i];
+    if (!sh) return [];
     const tier = tierOf(sh.revs);
     const m = material(tier);
-    setText(c.chip, m.name);
-    c.chip.style.setProperty("--c", m.color);
-    c.btn.parentElement?.style.setProperty("--mat", m.color);
     const p = pinionTeeth(s);
-    setText(c.meta, `×${stageRatio(s, c.shaft).toFixed(2)} · ${wheelTeeth(sh.teethLevel)}:${p} dientes · ${fmtRpm(g.speeds[c.shaft] ?? 0)}`);
-    if (tier >= MAX_TIER) {
-      c.fill.style.width = "100%";
-      setText(c.next, "Máximo");
-    } else {
-      const lo = tier === 0 ? 0 : 10 ** tier;
-      const hi = 10 ** (tier + 1);
-      c.fill.style.width = `${Math.min(100, ((sh.revs - lo) / (hi - lo)) * 100).toFixed(1)}%`;
-      setText(c.next, material(tier + 1).name);
+    const gearIcon = icon("gear");
+    gearIcon.style.color = m.color;
+    const out: Node[] = [
+      h("div", { class: "tip-title with-icon" }, gearIcon, h("span", {}, `Etapa ${i}`)),
+      h("div", { class: "tip-row" }, h("span", { class: "muted" }, "Material"),
+        tier >= MAX_TIER ? m.name : `${m.name} → ${material(tier + 1).name} (${Math.floor(this.tierProgress(sh.revs) * 100)}%)`),
+      h("div", { class: "tip-row" }, h("span", { class: "muted" }, "Relación"), `×${stageRatio(s, i).toFixed(2)} (${wheelTeeth(sh.teethLevel)}:${p} dientes)`),
+      h("div", { class: "tip-row" }, h("span", { class: "muted" }, "Velocidad"), fmtRpm(this.game.speeds[i] ?? 0)),
+    ];
+    const gear = gearOf(s, i);
+    if (gear !== 0) {
+      out.push(h("div", { class: "tip-row" }, h("span", { class: "muted" }, "Marcha"),
+        gear === 2 ? `Larga ×${CONFIG.gearbox.long} (calienta)` : `Corta ×${CONFIG.gearbox.short} (enfría)`));
+    } else if (gearboxUnlocked(s)) {
+      out.push(h("div", { class: "tip-row" }, h("span", { class: "muted" }, "Caja de cambios"), `${fmt(gearboxCost(i))} monedas`));
     }
-    c.fill.style.background = m.color;
-    if (teethMaxed(s, c.shaft)) {
-      setText(c.label, "Dientes al máximo");
-      setText(c.cost, "");
-      c.btn.classList.remove("affordable");
-      c.btn.disabled = true;
+    if (teethMaxed(s, i)) {
+      out.push(h("div", { class: "tip-cost maxed" }, "Dientes al máximo"));
     } else {
-      const b = teethBulk(s, c.shaft, this.amount);
+      const b = teethBulk(s, i, this.amount);
       const levels = Math.max(1, b.count);
-      setText(c.label, `+${levels * CONFIG.teethPerLevel} dientes → ×${(wheelTeeth(sh.teethLevel + levels) / p).toFixed(2)}`);
-      setText(c.cost, fmt(b.cost));
-      c.btn.disabled = false;
-      c.btn.classList.toggle("affordable", b.cost <= s.coins);
+      const ok = b.cost <= s.coins;
+      out.push(
+        h("div", { class: "tip-row" }, h("span", { class: "muted" }, "Mejora"), `+${levels * CONFIG.teethPerLevel} dientes → ×${(wheelTeeth(sh.teethLevel + levels) / p).toFixed(2)}`),
+        h("div", { class: ok ? "tip-cost ok" : "tip-cost short" },
+          withIcon("coins", `${fmt(b.cost)} monedas${ok ? " · clic para comprar" : ` · tienes ${fmt(s.coins)}`}`)),
+      );
     }
-    const gear = gearOf(s, c.shaft);
-    c.gearRow.hidden = !gearboxUnlocked(s);
-    c.install.hidden = gear !== 0;
-    c.short.hidden = gear === 0;
-    c.long.hidden = gear === 0;
-    if (gear === 0) {
-      const cost = gearboxCost(c.shaft);
-      setText(c.installCost, fmt(cost));
-      c.install.classList.toggle("affordable", cost <= s.coins);
-    } else {
-      c.short.classList.toggle("active", gear === 1);
-      c.long.classList.toggle("active", gear === 2);
-    }
+    return out;
   }
 
   private affordableTeethCount(): number {

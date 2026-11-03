@@ -14,6 +14,13 @@ npm run build      # build de producción en dist/
 
 `BOT_SECONDS=3600 npm run balance` acorta la partida del bot y `BOT_STALL=300` cambia cuánto espera sin comprar etapas antes de fundir. En desarrollo, `?speed=40` en la URL acelera la simulación, y `window.__game`, `window.__renderer` y `window.__fx` dan acceso al juego desde la consola.
 
+## Versión web
+
+Cada push a `main` ejecuta los tests, compila y publica el juego en GitHub Pages (`.github/workflows/deploy.yml`):
+https://dnl-26.github.io/Engranjes-/
+
+Requisito, una sola vez: en el repositorio, *Settings → Pages → Source: GitHub Actions*.
+
 ## Controles
 
 - **Clic** en el escenario, el botón **Manivela** o **Espacio**: girar la manivela.

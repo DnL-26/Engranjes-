@@ -183,7 +183,7 @@ Código en `src/audio/` (`synth.ts`, `music.ts`, `ambience.ts` y `sound.ts`).
 - Arriba: monedas a la izquierda, la barra del Gran Reloj en el centro y la velocidad de salida a la derecha. Debajo, botones pequeños: *Recuerdos*, *Logros*, *Ver todo el tren* y *Ajustes* (sonido, exportar, importar, borrar).
 - Abajo, una barra con la manivela, cuatro botones y la sobremarcha:
   - **Mejorar motor:** compra niveles de motor.
-  - **Engranajes:** abre el **taller**, una ventana con una fila por etapa (material, progreso, relación y botón de dientes), el selector ×1/×10/Máx y *Mejorar todo*. El botón muestra cuántas mejoras se pueden pagar.
+  - **Engranajes:** abre el **taller**, con la misma estética que la tienda de latón: una cuadrícula de botones cuadrados, uno por etapa (la más nueva primero). Cada uno muestra un engranaje del color de su material, rodeado de un aro que se llena hacia el siguiente material, el nombre y la relación. Un clic compra dientes. El tooltip da el material y su avance, la relación, la velocidad, la marcha y la próxima mejora con su precio. Con cajas de cambios, debajo de cada etapa hay un botón que instala la caja (con su precio) o alterna entre marcha larga (roja) y corta (azul). Arriba quedan el selector ×1/×10/Máx, *Mejorar todo* y la barra de marchas. El botón de la barra inferior muestra cuántas mejoras se pueden pagar.
   - **Añadir engranaje:** compra la etapa siguiente.
   - **Renacer:** siempre disponible. Muestra el latón que darías (1 por engranaje) y abre la **fundición**, con el botón para renacer y la tienda de latón debajo.
   - **Tienda de latón:** una cuadrícula de botones cuadrados con icono y nombre. Al pasar el ratón (o al enfocar con el teclado), un tooltip explica la mejora, su nivel, el efecto actual y el siguiente, y el precio (dorado si alcanza, rojo si no). El botón se ilumina si se puede comprar y se atenúa al máximo; un clic compra.
@@ -196,7 +196,6 @@ Código en `src/audio/` (`synth.ts`, `music.ts`, `ambience.ts` y `sound.ts`).
   - **Ajustes:** mezclador, opciones y atajos.
   - **Tienda de latón:** un icono por mejora.
   - **Mejoras activas, racha, pedidos y chatarrero.**
-- En el taller, el engranaje de cada etapa toma el color de su material.
 - Los iconos se nombran por su significado en `src/ui/icons.ts`, para poder cambiar el dibujo sin tocar la interfaz.
 - Barras de desplazamiento finas en tonos latón y sin flechas.
 

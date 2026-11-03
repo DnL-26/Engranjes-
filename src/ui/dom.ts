@@ -28,6 +28,7 @@ export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
 
 let tipEl: HTMLElement | null = null;
 let tipOwner: Element | null = null;
+let tipRender: (() => Child[]) | null = null;
 
 function tipNode(): HTMLElement {
   if (!tipEl) {
@@ -49,8 +50,17 @@ function placeTip(x: number, y: number): void {
   t.style.top = `${Math.max(pad, top)}px`;
 }
 
+/** Vuelve a dibujar el tooltip visible (para datos que cambian mientras se mira, como la velocidad). */
+export function refreshTooltip(): void {
+  if (tipOwner && tipRender && tipEl && !tipEl.hidden) {
+    if (!tipOwner.isConnected) hideTooltip();
+    else tipEl.replaceChildren(...tipRender());
+  }
+}
+
 export function hideTooltip(): void {
   tipOwner = null;
+  tipRender = null;
   if (tipEl) tipEl.hidden = true;
 }
 
@@ -62,6 +72,7 @@ export function tooltip(el: HTMLElement, render: () => Child[]): void {
   const show = (x: number, y: number) => {
     const t = tipNode();
     tipOwner = el;
+    tipRender = render;
     t.replaceChildren(...render());
     t.hidden = false;
     placeTip(x, y);
